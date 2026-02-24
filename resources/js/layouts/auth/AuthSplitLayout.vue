@@ -1,0 +1,62 @@
+<script setup lang="ts">
+import { Link, usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
+import AppLogoIcon from '@/components/AppLogoIcon.vue';
+import { home } from '@/routes';
+import { type AppPageProps } from '@/types';
+
+const page = usePage<AppPageProps>();
+const companyName = computed(() => {
+    const name = String(page.props.company?.name ?? '').trim();
+
+    return name === '' || name === 'Laravel' || name === 'Laravel Starter Kit'
+        ? 'App de Gestao'
+        : name;
+});
+const companyLogoUrl = computed(() => page.props.company?.logo_url ?? null);
+
+defineProps<{
+    title?: string;
+    description?: string;
+}>();
+</script>
+
+<template>
+    <div
+        class="relative grid h-dvh flex-col items-center justify-center px-8 sm:px-0 lg:max-w-none lg:grid-cols-2 lg:px-0"
+    >
+        <div
+            class="relative hidden h-full flex-col bg-muted p-10 text-white lg:flex dark:border-r"
+        >
+            <div class="absolute inset-0 bg-zinc-900" />
+            <Link
+                :href="home()"
+                class="relative z-20 flex items-center text-lg font-medium"
+            >
+                <img
+                    v-if="companyLogoUrl"
+                    :src="companyLogoUrl"
+                    alt="Company logo"
+                    class="mr-2 size-8 object-contain"
+                >
+                <AppLogoIcon v-else class="mr-2 size-8 fill-current text-white" />
+                {{ companyName }}
+            </Link>
+        </div>
+        <div class="lg:p-8">
+            <div
+                class="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]"
+            >
+                <div class="flex flex-col space-y-2 text-center">
+                    <h1 class="text-xl font-medium tracking-tight" v-if="title">
+                        {{ title }}
+                    </h1>
+                    <p class="text-sm text-muted-foreground" v-if="description">
+                        {{ description }}
+                    </p>
+                </div>
+                <slot />
+            </div>
+        </div>
+    </div>
+</template>
