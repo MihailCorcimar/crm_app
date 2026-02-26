@@ -57,7 +57,7 @@ class HandleInertiaRequests extends Middleware
         if (! Schema::hasTable('company_settings')) {
             return [
                 'name' => $this->defaultAppName(),
-                'logo_url' => null,
+                'logo_url' => '/images/logo.png',
             ];
         }
 
@@ -69,7 +69,7 @@ class HandleInertiaRequests extends Middleware
         }
 
         $tenantId = data_get($request->attributes->get('tenantContext'), 'active.id');
-        $logoUrl = null;
+        $logoUrl = '/images/logo.png';
 
         if ($request->user() && $company?->logo_path) {
             $logoUrl = route('settings.company.logo', array_filter([
@@ -86,7 +86,7 @@ class HandleInertiaRequests extends Middleware
 
     private function defaultAppName(): string
     {
-        return 'App de Gestao';
+        return 'CRM';
     }
 
     /**
@@ -114,3 +114,4 @@ class HandleInertiaRequests extends Middleware
         ];
     }
 }
+

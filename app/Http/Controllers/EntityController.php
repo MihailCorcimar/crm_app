@@ -15,6 +15,10 @@ use Inertia\Response;
 
 class EntityController extends Controller
 {
+    public function __construct()
+    {
+        $this->authorizeResource(Entity::class, 'entity');
+    }
     /**
      * Display a listing of the resource.
      */
@@ -290,3 +294,4 @@ XML;
             ->all();
     }
 }
+

@@ -10,7 +10,7 @@ const companyName = computed(() => {
     const name = String(page.props.company?.name ?? '').trim();
 
     return name === '' || name === 'Laravel' || name === 'Laravel Starter Kit'
-        ? 'App de Gestao'
+        ? 'CRM'
         : name;
 });
 

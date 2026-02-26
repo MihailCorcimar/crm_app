@@ -547,9 +547,6 @@ function resumeSubscription(): void {
                             >
                                 {{ feature_access.premium_reports ? 'Ativo' : 'Bloqueado' }}
                             </Badge>
-                            <Button v-if="feature_access.premium_reports" as-child>
-                                <Link href="/tenants/billing/premium-reports">Abrir</Link>
-                            </Button>
                         </div>
                     </div>
                 </CardContent>

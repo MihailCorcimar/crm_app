@@ -82,46 +82,6 @@ class Entity extends Model
     }
 
     /**
-     * @return HasMany<Proposal, $this>
-     */
-    public function proposalsAsCustomer(): HasMany
-    {
-        return $this->hasMany(Proposal::class, 'customer_id');
-    }
-
-    /**
-     * @return HasMany<ProposalLine, $this>
-     */
-    public function proposalLinesAsSupplier(): HasMany
-    {
-        return $this->hasMany(ProposalLine::class, 'supplier_id');
-    }
-
-    /**
-     * @return HasMany<Order, $this>
-     */
-    public function ordersAsCustomer(): HasMany
-    {
-        return $this->hasMany(Order::class, 'customer_id');
-    }
-
-    /**
-     * @return HasMany<SupplierOrder, $this>
-     */
-    public function supplierOrders(): HasMany
-    {
-        return $this->hasMany(SupplierOrder::class, 'supplier_id');
-    }
-
-    /**
-     * @return HasMany<SupplierInvoice, $this>
-     */
-    public function supplierInvoices(): HasMany
-    {
-        return $this->hasMany(SupplierInvoice::class, 'supplier_id');
-    }
-
-    /**
      * @return HasMany<CalendarEvent, $this>
      */
     public function calendarEvents(): HasMany

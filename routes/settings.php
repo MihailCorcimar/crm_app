@@ -3,13 +3,11 @@
 use App\Http\Controllers\Settings\ContactRoleController;
 use App\Http\Controllers\Settings\CountryController;
 use App\Http\Controllers\Settings\CompanySettingController;
-use App\Http\Controllers\Settings\ItemController;
 use App\Http\Controllers\Settings\CalendarActionController;
 use App\Http\Controllers\Settings\CalendarTypeController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\TwoFactorAuthenticationController;
-use App\Http\Controllers\Settings\VatRateController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -33,26 +31,6 @@ Route::middleware(['auth', 'tenant.active'])->group(function () {
         ->name('settings.contact-roles.update');
     Route::delete('settings/contacts/roles/{contactRole}', [ContactRoleController::class, 'destroy'])
         ->name('settings.contact-roles.destroy');
-
-    Route::get('settings/finance/vat-rates', [VatRateController::class, 'index'])
-        ->name('settings.vat-rates.index');
-    Route::post('settings/finance/vat-rates', [VatRateController::class, 'store'])
-        ->name('settings.vat-rates.store');
-    Route::put('settings/finance/vat-rates/{vatRate}', [VatRateController::class, 'update'])
-        ->name('settings.vat-rates.update');
-    Route::delete('settings/finance/vat-rates/{vatRate}', [VatRateController::class, 'destroy'])
-        ->name('settings.vat-rates.destroy');
-
-    Route::get('settings/items', [ItemController::class, 'index'])
-        ->name('settings.items.index');
-    Route::post('settings/items', [ItemController::class, 'store'])
-        ->name('settings.items.store');
-    Route::put('settings/items/{item}', [ItemController::class, 'update'])
-        ->name('settings.items.update');
-    Route::delete('settings/items/{item}', [ItemController::class, 'destroy'])
-        ->name('settings.items.destroy');
-    Route::get('settings/items/{item}/photo', [ItemController::class, 'photo'])
-        ->name('settings.items.photo');
 
     Route::get('settings/company', [CompanySettingController::class, 'index'])
         ->name('settings.company.index');

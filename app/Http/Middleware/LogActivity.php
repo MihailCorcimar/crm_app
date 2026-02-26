@@ -75,13 +75,11 @@ class LogActivity
         $prefix = explode('.', $routeName)[0] ?? 'Unknown';
 
         return match ($prefix) {
-            'entities' => 'Clientes / Fornecedores',
-            'contacts' => 'Contactos',
-            'proposals' => 'Propostas',
-            'orders' => 'Encomendas',
-            'supplier-orders' => 'Encomendas - Fornecedores',
-            'supplier-invoices' => 'Faturas Fornecedor',
+            'entities' => 'Entidades',
+            'contacts', 'people' => 'Pessoas',
+            'deals' => 'Negocios',
             'calendar' => 'Calendario',
+            'tenants' => 'Tenants',
             'access' => 'Gestao de Acessos',
             'settings' => 'Configuracoes',
             default => ucfirst($prefix),

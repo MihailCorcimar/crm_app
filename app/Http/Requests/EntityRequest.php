@@ -14,7 +14,14 @@ class EntityRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return true;
+        /** @var Entity|null $entity */
+        $entity = $this->route('entity');
+
+        if ($entity !== null) {
+            return $this->user()?->can('update', $entity) ?? false;
+        }
+
+        return $this->user()?->can('create', Entity::class) ?? false;
     }
 
     /**

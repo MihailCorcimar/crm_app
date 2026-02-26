@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { Building2, Calendar, Contact, FileText, Landmark, Settings, Shield, ShoppingCart, Truck, Users } from 'lucide-vue-next';
+import { BookOpenText, BriefcaseBusiness, Building2, Calendar, Settings, Shield, Users } from 'lucide-vue-next';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
 import {
@@ -18,24 +18,19 @@ import AppLogo from './AppLogo.vue';
 
 const mainNavItems: NavItem[] = [
     {
-        title: 'Clientes',
-        href: '/entities?type=customer',
+        title: 'Entidades',
+        href: '/entities',
+        icon: Building2,
+    },
+    {
+        title: 'Pessoas',
+        href: '/people',
         icon: Users,
     },
     {
-        title: 'Fornecedores',
-        href: '/entities?type=supplier',
-        icon: Truck,
-    },
-    {
-        title: 'Contactos',
-        href: '/contacts',
-        icon: Contact,
-    },
-    {
-        title: 'Propostas',
-        href: '/proposals',
-        icon: FileText,
+        title: 'Negocios',
+        href: '/deals',
+        icon: BriefcaseBusiness,
     },
     {
         title: 'Calendario',
@@ -43,43 +38,9 @@ const mainNavItems: NavItem[] = [
         icon: Calendar,
     },
     {
-        title: 'Encomendas - Clientes',
-        href: '/orders',
-        icon: ShoppingCart,
-    },
-    {
-        title: 'Encomendas - Fornecedores',
-        href: '/supplier-orders',
-        icon: ShoppingCart,
-    },
-    {
-        title: 'Ordens de Trabalho',
-        href: '/work-orders',
-        icon: FileText,
-    },
-    {
-        title: 'Financeiro',
-        href: '/finance/bank-accounts',
-        icon: Landmark,
-        children: [
-            {
-                title: 'Contas Bancarias',
-                href: '/finance/bank-accounts',
-            },
-            {
-                title: 'Conta Corrente Clientes',
-                href: '/finance/customer-current-account',
-            },
-            {
-                title: 'Faturas Fornecedores',
-                href: '/supplier-invoices',
-            },
-        ],
-    },
-    {
-        title: 'Arquivo Digital',
-        href: '/digital-archive',
-        icon: FileText,
+        title: 'Logs',
+        href: '/logs',
+        icon: BookOpenText,
     },
     {
         title: 'Gestao de Acessos',
@@ -106,7 +67,7 @@ const mainNavItems: NavItem[] = [
                 href: '/tenants',
             },
             {
-                title: 'Planos e faturação',
+                title: 'Planos e faturacao',
                 href: '/tenants/billing',
             },
         ],
@@ -121,7 +82,7 @@ const mainNavItems: NavItem[] = [
                 href: '/settings/entities/countries',
             },
             {
-                title: 'Contactos - Funcoes',
+                title: 'Pessoas - Funcoes',
                 href: '/settings/contacts/roles',
             },
             {
@@ -133,25 +94,12 @@ const mainNavItems: NavItem[] = [
                 href: '/settings/calendar/actions',
             },
             {
-                title: 'Artigos',
-                href: '/settings/items',
-            },
-            {
-                title: 'Financeiro - IVA',
-                href: '/settings/finance/vat-rates',
-            },
-            {
-                title: 'Logs',
-                href: '/logs',
-            },
-            {
                 title: 'Empresa',
                 href: '/settings/company',
             },
         ],
     },
 ];
-
 </script>
 
 <template>

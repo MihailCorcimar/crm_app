@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\CalendarEvent;
 use App\Support\TenantContext;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -13,7 +14,14 @@ class CalendarEventRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return true;
+        /** @var CalendarEvent|null $calendarEvent */
+        $calendarEvent = $this->route('calendar');
+
+        if ($calendarEvent !== null) {
+            return $this->user()?->can('update', $calendarEvent) ?? false;
+        }
+
+        return $this->user()?->can('create', CalendarEvent::class) ?? false;
     }
 
     /**
@@ -30,7 +38,11 @@ class CalendarEventRequest extends FormRequest
             'share' => ['nullable', 'string', 'max:255'],
             'knowledge' => ['nullable', 'string', 'max:255'],
             'entity_id' => ['nullable', Rule::exists('entities', 'id')->where(fn ($query) => $query->where('tenant_id', $tenantId))],
-            'user_id' => ['nullable', 'exists:users,id'],
+            'user_id' => [
+                'nullable',
+                Rule::exists('users', 'id')->where(fn ($query) => $query->where('status', 'active')),
+                Rule::exists('tenant_user', 'user_id')->where(fn ($query) => $query->where('tenant_id', $tenantId)),
+            ],
             'calendar_type_id' => ['nullable', Rule::exists('calendar_types', 'id')->where(fn ($query) => $query->where('tenant_id', $tenantId))],
             'calendar_action_id' => ['nullable', Rule::exists('calendar_actions', 'id')->where(fn ($query) => $query->where('tenant_id', $tenantId))],
             'description' => ['nullable', 'string'],

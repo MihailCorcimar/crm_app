@@ -15,6 +15,10 @@ use Inertia\Response;
 
 class CalendarController extends Controller
 {
+    public function __construct()
+    {
+        $this->authorizeResource(CalendarEvent::class, 'calendar');
+    }
     public function index(Request $request): Response
     {
         $baseQuery = CalendarEvent::query()
@@ -217,3 +221,4 @@ class CalendarController extends Controller
             ->all();
     }
 }
+
