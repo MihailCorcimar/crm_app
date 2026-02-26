@@ -8,6 +8,7 @@ import { type BreadcrumbItem } from '@/types';
 type ContactShowPayload = {
     id: number;
     number: number;
+    entity_id: number | null;
     entity: string | null;
     first_name: string;
     last_name: string | null;
@@ -20,24 +21,33 @@ type ContactShowPayload = {
     status: string;
 };
 
+type InteractionHistoryItem = {
+    key: string;
+    interaction_type: string;
+    title: string;
+    details: string;
+    occurred_at: string;
+};
+
 const props = defineProps<{
     contact: ContactShowPayload;
+    interaction_history: InteractionHistoryItem[];
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Contactos', href: '/contacts' },
+    { title: 'Pessoas', href: '/people' },
     {
         title: `${props.contact.first_name} ${props.contact.last_name ?? ''}`.trim(),
-        href: `/contacts/${props.contact.id}`,
+        href: `/people/${props.contact.id}`,
     },
 ];
 
 function destroyContact(): void {
-    if (!window.confirm('Tens a certeza que queres eliminar este contacto?')) {
+    if (!window.confirm('Tens a certeza que queres eliminar esta pessoa?')) {
         return;
     }
 
-    router.delete(`/contacts/${props.contact.id}`);
+    router.delete(`/people/${props.contact.id}`);
 }
 </script>
 
@@ -51,10 +61,10 @@ function destroyContact(): void {
                     <CardTitle>{{ `${contact.first_name} ${contact.last_name ?? ''}`.trim() }}</CardTitle>
                     <div class="flex gap-2">
                         <Button variant="outline" as-child>
-                            <Link href="/contacts">Voltar</Link>
+                            <Link href="/people">Voltar</Link>
                         </Button>
                         <Button variant="outline" as-child>
-                            <Link :href="`/contacts/${contact.id}/edit`">Editar</Link>
+                            <Link :href="`/people/${contact.id}/edit`">Editar</Link>
                         </Button>
                         <Button variant="destructive" @click="destroyContact">
                             Eliminar
@@ -75,6 +85,26 @@ function destroyContact(): void {
                         <div><dt class="text-sm text-muted-foreground">Consentimento RGPD</dt><dd>{{ contact.gdpr_consent ? 'Sim' : 'Nao' }}</dd></div>
                         <div><dt class="text-sm text-muted-foreground">Observacoes</dt><dd>{{ contact.notes || '-' }}</dd></div>
                     </dl>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Historico de interacoes</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <ul v-if="interaction_history.length > 0" class="space-y-2">
+                        <li
+                            v-for="item in interaction_history"
+                            :key="item.key"
+                            class="rounded-md border p-3 text-sm"
+                        >
+                            <p class="font-medium">{{ item.occurred_at }} - {{ item.interaction_type }}</p>
+                            <p class="text-muted-foreground">{{ item.title }}</p>
+                            <p class="text-muted-foreground">{{ item.details }}</p>
+                        </li>
+                    </ul>
+                    <p v-else class="text-sm text-muted-foreground">Sem interacoes para mostrar.</p>
                 </CardContent>
             </Card>
         </div>

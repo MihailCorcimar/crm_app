@@ -36,7 +36,7 @@ class ContactRequest extends FormRequest
         $tenantId = TenantContext::id($this) ?? 0;
 
         return [
-            'entity_id' => ['required', 'integer', Rule::exists('entities', 'id')->where(fn ($query) => $query->where('tenant_id', $tenantId))],
+            'entity_id' => ['nullable', 'integer', Rule::exists('entities', 'id')->where(fn ($query) => $query->where('tenant_id', $tenantId))],
             'first_name' => ['required', 'string', 'max:255'],
             'last_name' => ['nullable', 'string', 'max:255'],
             'role_id' => ['required', 'integer', Rule::exists('contact_roles', 'id')->where(fn ($query) => $query->where('tenant_id', $tenantId))],

@@ -13,7 +13,7 @@ type SelectOption = {
 type ContactFormPayload = {
     id: number;
     number: number;
-    entity_id: number;
+    entity_id: number | null;
     first_name: string;
     last_name: string | null;
     role_id: number;
@@ -32,13 +32,13 @@ const props = defineProps<{
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Contactos', href: '/contacts' },
-    { title: 'Editar contacto', href: `/contacts/${props.contact.id}/edit` },
+    { title: 'Pessoas', href: '/people' },
+    { title: 'Editar pessoa', href: `/people/${props.contact.id}/edit` },
 ];
 
 const form = useForm({
     number: props.contact.number,
-    entity_id: props.contact.entity_id,
+    entity_id: props.contact.entity_id ?? '',
     first_name: props.contact.first_name,
     last_name: props.contact.last_name ?? '',
     role_id: props.contact.role_id,
@@ -51,18 +51,18 @@ const form = useForm({
 });
 
 function submit(): void {
-    form.put(`/contacts/${props.contact.id}`);
+    form.put(`/people/${props.contact.id}`);
 }
 </script>
 
 <template>
-    <Head title="Editar contacto" />
+    <Head title="Editar pessoa" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
             <Card>
                 <CardHeader>
-                    <CardTitle>Editar contacto</CardTitle>
+                    <CardTitle>Editar pessoa</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <ContactForm

@@ -59,7 +59,6 @@ Route::middleware(['auth'])->group(function (): void {
             ->except(['show'])
             ->parameters(['calendar' => 'calendar']);
 
-        Route::get('people', fn () => to_route('contacts.index'))->name('people.index');
         Route::get('deals', function () {
             return Inertia::render('shared/Placeholder', [
                 'title' => 'Negocios',
@@ -67,7 +66,9 @@ Route::middleware(['auth'])->group(function (): void {
             ]);
         })->name('deals.index');
 
-        Route::resource('contacts', ContactController::class);
+        Route::resource('people', ContactController::class)
+            ->parameters(['people' => 'contact'])
+            ->names('people');
         Route::post('entities/vies', [EntityController::class, 'lookupVat'])->name('entities.vies');
         Route::resource('entities', EntityController::class);
     });

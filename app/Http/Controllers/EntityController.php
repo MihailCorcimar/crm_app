@@ -3,13 +3,17 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\EntityRequest;
+use App\Models\Contact;
 use App\Models\Country;
 use App\Models\Entity;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -107,6 +111,8 @@ class EntityController extends Controller
                 'notes' => $entity->notes,
                 'gdpr_consent' => $entity->gdpr_consent,
             ],
+            'associated_people' => $this->associatedPeople($entity),
+            'deal_history' => $this->dealHistory($entity),
         ]);
     }
 
@@ -300,6 +306,82 @@ XML;
                 'code' => strtoupper((string) $country->code),
                 'name' => $country->name,
             ])
+            ->all();
+    }
+
+    /**
+     * @return array<int, array{id: int, name: string, email: string|null, mobile: string|null, status: string}>
+     */
+    private function associatedPeople(Entity $entity): array
+    {
+        return Contact::query()
+            ->where('entity_id', $entity->id)
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->limit(25)
+            ->get(['id', 'first_name', 'last_name', 'email', 'mobile', 'status'])
+            ->map(fn (Contact $contact): array => [
+                'id' => $contact->id,
+                'name' => trim(sprintf('%s %s', $contact->first_name, (string) $contact->last_name)),
+                'email' => $contact->email,
+                'mobile' => $contact->mobile,
+                'status' => (string) $contact->status,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<int, array{id: int, title: string, stage: string, value: float, probability: int, expected_close_date: string|null, owner: string|null, created_at: string}>
+     */
+    private function dealHistory(Entity $entity): array
+    {
+        if (! Schema::hasTable('deals')) {
+            return [];
+        }
+
+        $query = DB::table('deals')
+            ->leftJoin('users as owners', 'owners.id', '=', 'deals.owner_id')
+            ->where('deals.entity_id', $entity->id);
+
+        if (Schema::hasColumn('deals', 'tenant_id')) {
+            $query->where('deals.tenant_id', $entity->tenant_id);
+        }
+
+        return $query
+            ->orderByDesc('deals.created_at')
+            ->limit(25)
+            ->get([
+                'deals.id',
+                'deals.title',
+                'deals.stage',
+                'deals.value',
+                'deals.probability',
+                'deals.expected_close_date',
+                'deals.created_at',
+                'owners.name as owner_name',
+            ])
+            ->map(static function ($deal): array {
+                $expectedCloseDate = $deal->expected_close_date !== null
+                    ? Carbon::parse((string) $deal->expected_close_date)->format('d/m/Y')
+                    : null;
+
+                $createdAt = $deal->created_at !== null
+                    ? Carbon::parse((string) $deal->created_at)->format('d/m/Y H:i')
+                    : '-';
+
+                return [
+                    'id' => (int) $deal->id,
+                    'title' => (string) $deal->title,
+                    'stage' => (string) $deal->stage,
+                    'value' => (float) $deal->value,
+                    'probability' => (int) $deal->probability,
+                    'expected_close_date' => $expectedCloseDate,
+                    'owner' => $deal->owner_name !== null ? (string) $deal->owner_name : null,
+                    'created_at' => $createdAt,
+                ];
+            })
+            ->values()
             ->all();
     }
 }

@@ -16,8 +16,8 @@ const props = defineProps<{
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Contactos', href: '/contacts' },
-    { title: 'Criar contacto', href: '/contacts/create' },
+    { title: 'Pessoas', href: '/people' },
+    { title: 'Criar pessoa', href: '/people/create' },
 ];
 
 const form = useForm({
@@ -35,18 +35,18 @@ const form = useForm({
 });
 
 function submit(): void {
-    form.post('/contacts');
+    form.post('/people');
 }
 </script>
 
 <template>
-    <Head title="Criar contacto" />
+    <Head title="Criar pessoa" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
             <Card>
                 <CardHeader>
-                    <CardTitle>Novo contacto</CardTitle>
+                    <CardTitle>Nova pessoa</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <ContactForm

@@ -36,7 +36,7 @@ const props = defineProps<{
     contacts: PaginatedContacts;
 }>();
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Contactos', href: '/contacts' }];
+const breadcrumbs: BreadcrumbItem[] = [{ title: 'Pessoas', href: '/people' }];
 
 const columns: ColumnDef<ContactRow>[] = [
     {
@@ -46,7 +46,7 @@ const columns: ColumnDef<ContactRow>[] = [
             h(
                 Link,
                 {
-                    href: `/contacts/${row.original.id}`,
+                    href: `/people/${row.original.id}`,
                     class: 'underline-offset-4 hover:underline',
                 },
                 () => row.original.first_name,
@@ -86,22 +86,22 @@ const columns: ColumnDef<ContactRow>[] = [
 </script>
 
 <template>
-    <Head title="Contactos" />
+    <Head title="Pessoas" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
             <Card>
                 <CardHeader class="flex flex-row items-center justify-between">
-                    <CardTitle>Contactos</CardTitle>
+                    <CardTitle>Pessoas</CardTitle>
                     <Button as-child>
-                        <Link href="/contacts/create">Criar</Link>
+                        <Link href="/people/create">Criar</Link>
                     </Button>
                 </CardHeader>
                 <CardContent class="space-y-4">
                     <DataTable
                         :columns="columns"
                         :data="contacts.data"
-                        empty-text="Sem contactos para mostrar."
+                        empty-text="Sem pessoas para mostrar."
                     />
 
                     <div class="flex flex-wrap items-center gap-2">

@@ -24,8 +24,29 @@ type EntityShowPayload = {
     gdpr_consent: boolean;
 };
 
+type AssociatedPerson = {
+    id: number;
+    name: string;
+    email: string | null;
+    mobile: string | null;
+    status: string;
+};
+
+type DealHistoryItem = {
+    id: number;
+    title: string;
+    stage: string;
+    value: number;
+    probability: number;
+    expected_close_date: string | null;
+    owner: string | null;
+    created_at: string;
+};
+
 const props = defineProps<{
     entity: EntityShowPayload;
+    associated_people: AssociatedPerson[];
+    deal_history: DealHistoryItem[];
 }>();
 
 const listingHref = '/entities';
@@ -81,6 +102,55 @@ function destroyEntity(): void {
                         <div><dt class="text-sm text-muted-foreground">Consentimento RGPD</dt><dd>{{ entity.gdpr_consent ? 'Sim' : 'Nao' }}</dd></div>
                         <div><dt class="text-sm text-muted-foreground">Notas</dt><dd>{{ entity.notes || '-' }}</dd></div>
                     </dl>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Pessoas associadas</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <ul v-if="associated_people.length > 0" class="space-y-2">
+                        <li
+                            v-for="person in associated_people"
+                            :key="person.id"
+                            class="rounded-md border p-3 text-sm"
+                        >
+                            <p class="font-medium">
+                                <Link :href="`/people/${person.id}`" class="underline-offset-4 hover:underline">
+                                    {{ person.name }}
+                                </Link>
+                            </p>
+                            <p class="text-muted-foreground">{{ person.email || '-' }} • {{ person.mobile || '-' }}</p>
+                        </li>
+                    </ul>
+                    <p v-else class="text-sm text-muted-foreground">Sem pessoas associadas.</p>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Historico de negocios</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <ul v-if="deal_history.length > 0" class="space-y-2">
+                        <li
+                            v-for="deal in deal_history"
+                            :key="deal.id"
+                            class="rounded-md border p-3 text-sm"
+                        >
+                            <p class="font-medium">{{ deal.title }}</p>
+                            <p class="text-muted-foreground">
+                                Etapa: {{ deal.stage }} • Valor: {{ deal.value.toFixed(2) }} EUR • Probabilidade:
+                                {{ deal.probability }}%
+                            </p>
+                            <p class="text-muted-foreground">
+                                Fecho previsto: {{ deal.expected_close_date || '-' }} • Responsavel:
+                                {{ deal.owner || '-' }} • Registo: {{ deal.created_at }}
+                            </p>
+                        </li>
+                    </ul>
+                    <p v-else class="text-sm text-muted-foreground">Sem negocios associados.</p>
                 </CardContent>
             </Card>
         </div>

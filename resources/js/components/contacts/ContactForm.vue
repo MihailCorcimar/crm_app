@@ -80,9 +80,8 @@ const numberDisplay = computed(() =>
                         <select
                             v-model="form.entity_id"
                             class="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                            required
                         >
-                            <option :value="''" disabled>Selecionar entidade</option>
+                            <option :value="''">Sem entidade associada</option>
                             <option v-for="entity in entities" :key="entity.id" :value="entity.id">
                                 {{ entity.name }}
                             </option>
@@ -210,7 +209,7 @@ const numberDisplay = computed(() =>
                 {{ submitLabel }}
             </Button>
             <Button type="button" variant="outline" as-child>
-                <Link href="/contacts">Cancelar</Link>
+                <Link href="/people">Cancelar</Link>
             </Button>
         </div>
     </form>
