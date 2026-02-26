@@ -24,30 +24,36 @@ class EntityController extends Controller
      */
     public function index(Request $request): Response
     {
-        $type = $request->string('type')->toString();
+        $name = trim($request->string('name')->toString());
+        $vat = trim($request->string('vat')->toString());
+        $status = $request->string('status')->toString();
 
         $entities = Entity::query()
-            ->when($type === 'customer', fn ($query) => $query->whereIn('type', ['customer', 'both']))
-            ->when($type === 'supplier', fn ($query) => $query->whereIn('type', ['supplier', 'both']))
+            ->when($name !== '', fn ($query) => $query->where('name', 'like', "%{$name}%"))
+            ->when($vat !== '', fn ($query) => $query->where(function ($innerQuery) use ($vat): void {
+                $innerQuery
+                    ->where('vat', 'like', "%{$vat}%")
+                    ->orWhere('tax_id', 'like', "%{$vat}%");
+            }))
+            ->when(in_array($status, ['active', 'inactive'], true), fn ($query) => $query->where('status', $status))
             ->latest()
             ->paginate(10)
             ->withQueryString()
             ->through(fn (Entity $entity): array => [
                 'id' => $entity->id,
-                'tax_id' => $entity->tax_id,
+                'vat' => (string) ($entity->vat ?: $entity->tax_id),
                 'name' => $entity->name,
                 'phone' => $entity->phone,
-                'mobile' => $entity->mobile,
-                'website' => $entity->website,
                 'email' => $entity->email,
                 'status' => $entity->status,
-                'type' => $entity->type,
             ]);
 
         return Inertia::render('entities/Index', [
             'entities' => $entities,
             'filters' => [
-                'type' => in_array($type, ['customer', 'supplier', 'both'], true) ? $type : 'both',
+                'name' => $name,
+                'vat' => $vat,
+                'status' => in_array($status, ['active', 'inactive'], true) ? $status : '',
             ],
         ]);
     }
@@ -60,7 +66,7 @@ class EntityController extends Controller
         $type = $request->string('type')->toString();
 
         return Inertia::render('entities/Create', [
-            'defaultType' => in_array($type, ['customer', 'supplier', 'both'], true) ? $type : 'customer',
+            'defaultType' => in_array($type, ['customer', 'supplier', 'both'], true) ? $type : 'both',
             'countries' => $this->countries(),
         ]);
     }
@@ -87,7 +93,7 @@ class EntityController extends Controller
                 'id' => $entity->id,
                 'type' => $entity->type,
                 'number' => $entity->number,
-                'tax_id' => $entity->tax_id,
+                'vat' => (string) ($entity->vat ?: $entity->tax_id),
                 'name' => $entity->name,
                 'phone' => $entity->phone,
                 'mobile' => $entity->mobile,
@@ -113,7 +119,7 @@ class EntityController extends Controller
             'entity' => [
                 'id' => $entity->id,
                 'type' => $entity->type,
-                'tax_id' => $entity->tax_id,
+                'vat' => (string) ($entity->vat ?: $entity->tax_id),
                 'name' => $entity->name,
                 'phone' => $entity->phone,
                 'mobile' => $entity->mobile,
@@ -154,12 +160,14 @@ class EntityController extends Controller
     public function lookupVat(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'tax_id' => ['required', 'string', 'regex:/^\d{9}$/'],
+            'vat' => ['nullable', 'string', 'regex:/^\d{9}$/', 'required_without:tax_id'],
+            'tax_id' => ['nullable', 'string', 'regex:/^\d{9}$/', 'required_without:vat'],
             'country_code' => ['nullable', 'string', 'size:2'],
         ]);
 
         $countryCode = strtoupper((string) ($validated['country_code'] ?? 'PT'));
-        $vatNumber = preg_replace('/\D+/', '', (string) $validated['tax_id']);
+        $vatInput = (string) ($validated['vat'] ?? $validated['tax_id'] ?? '');
+        $vatNumber = preg_replace('/\D+/', '', $vatInput);
 
         $envelope = <<<XML
 <?xml version="1.0" encoding="UTF-8"?>
@@ -262,7 +270,8 @@ XML;
     {
         return [
             'type' => $validated['type'],
-            'tax_id' => $validated['tax_id'],
+            'tax_id' => $validated['vat'],
+            'vat' => $validated['vat'],
             'name' => $validated['name'],
             'phone' => $validated['phone'] ?? null,
             'mobile' => $validated['mobile'] ?? null,

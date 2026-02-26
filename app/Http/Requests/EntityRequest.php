@@ -9,6 +9,19 @@ use Illuminate\Validation\Rule;
 
 class EntityRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $rawVat = $this->input('vat', $this->input('tax_id'));
+
+        if (! is_string($rawVat)) {
+            return;
+        }
+
+        $this->merge([
+            'vat' => preg_replace('/\D+/', '', $rawVat) ?? $rawVat,
+        ]);
+    }
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -37,10 +50,13 @@ class EntityRequest extends FormRequest
 
         return [
             'type' => ['required', Rule::in(['customer', 'supplier', 'both'])],
-            'tax_id' => [
+            'vat' => [
                 'required',
                 'string',
                 'regex:/^\d{9}$/',
+                Rule::unique('entities', 'vat')
+                    ->where(fn ($query) => $query->where('tenant_id', $tenantId))
+                    ->ignore($entity?->id),
                 Rule::unique('entities', 'tax_id')
                     ->where(fn ($query) => $query->where('tenant_id', $tenantId))
                     ->ignore($entity?->id),

@@ -22,6 +22,7 @@ class Entity extends Model
         'type',
         'number',
         'tax_id',
+        'vat',
         'name',
         'address',
         'postal_code',

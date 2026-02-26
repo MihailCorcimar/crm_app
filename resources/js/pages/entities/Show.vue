@@ -9,7 +9,7 @@ type EntityShowPayload = {
     id: number;
     type: string;
     number: number;
-    tax_id: string;
+    vat: string;
     name: string;
     phone: string | null;
     mobile: string | null;
@@ -28,22 +28,10 @@ const props = defineProps<{
     entity: EntityShowPayload;
 }>();
 
-const listingHref =
-    props.entity.type === 'supplier'
-        ? '/entities?type=supplier'
-        : props.entity.type === 'both'
-          ? '/entities?type=both'
-          : '/entities?type=customer';
-
-const sectionTitle =
-    props.entity.type === 'supplier'
-        ? 'Fornecedores'
-        : props.entity.type === 'both'
-          ? 'Entidades'
-          : 'Clientes';
+const listingHref = '/entities';
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: sectionTitle, href: listingHref },
+    { title: 'Entidades', href: listingHref },
     { title: props.entity.name, href: `/entities/${props.entity.id}` },
 ];
 
@@ -80,7 +68,7 @@ function destroyEntity(): void {
                     <dl class="grid gap-4 md:grid-cols-2">
                         <div><dt class="text-sm text-muted-foreground">Numero</dt><dd>{{ entity.number }}</dd></div>
                         <div><dt class="text-sm text-muted-foreground">Tipo</dt><dd>{{ entity.type }}</dd></div>
-                        <div><dt class="text-sm text-muted-foreground">NIF</dt><dd>{{ entity.tax_id }}</dd></div>
+                        <div><dt class="text-sm text-muted-foreground">VAT</dt><dd>{{ entity.vat }}</dd></div>
                         <div><dt class="text-sm text-muted-foreground">Estado</dt><dd>{{ entity.status }}</dd></div>
                         <div><dt class="text-sm text-muted-foreground">Telefone</dt><dd>{{ entity.phone || '-' }}</dd></div>
                         <div><dt class="text-sm text-muted-foreground">Telemovel</dt><dd>{{ entity.mobile || '-' }}</dd></div>

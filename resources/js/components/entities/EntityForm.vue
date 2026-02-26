@@ -22,7 +22,7 @@ type CountryOption = {
 const props = defineProps<{
     form: {
         type: string;
-        tax_id: string;
+        vat: string;
         name: string;
         phone: string;
         mobile: string;
@@ -50,15 +50,15 @@ const emit = defineEmits<{
     submit: [];
 }>();
 
-function normalizeTaxId(value: string): string {
+function normalizeVat(value: string): string {
     return value.replace(/\D+/g, '').slice(0, 9);
 }
 
 async function lookupVies(): Promise<void> {
-    const taxId = normalizeTaxId(props.form.tax_id);
-    props.form.tax_id = taxId;
+    const vat = normalizeVat(props.form.vat);
+    props.form.vat = vat;
 
-    if (taxId.length !== 9) {
+    if (vat.length !== 9) {
         viesMessage.value = '';
         viesMessageType.value = '';
         return;
@@ -81,7 +81,7 @@ async function lookupVies(): Promise<void> {
                 'X-CSRF-TOKEN': csrfToken ?? '',
             },
             body: JSON.stringify({
-                tax_id: taxId,
+                vat,
                 country_code: 'PT',
             }),
         });
@@ -95,7 +95,7 @@ async function lookupVies(): Promise<void> {
         }
 
         if (!payload.valid) {
-            viesMessage.value = 'NIF nao valido no VIES.';
+            viesMessage.value = 'VAT nao valido no VIES.';
             viesMessageType.value = 'error';
             return;
         }
@@ -173,13 +173,13 @@ async function lookupVies(): Promise<void> {
         </div>
 
         <div class="grid gap-4 md:grid-cols-2">
-            <FormField name="tax_id">
+            <FormField name="vat">
                 <FormItem>
-                    <FormLabel>NIF</FormLabel>
+                    <FormLabel>VAT</FormLabel>
                     <FormControl>
                         <div class="flex gap-2">
                             <Input
-                                v-model="form.tax_id"
+                                v-model="form.vat"
                                 inputmode="numeric"
                                 maxlength="9"
                                 placeholder="123456789"
@@ -202,7 +202,7 @@ async function lookupVies(): Promise<void> {
                     >
                         {{ viesMessage }}
                     </FormDescription>
-                    <FormMessage>{{ form.errors.tax_id }}</FormMessage>
+                    <FormMessage>{{ form.errors.vat }}</FormMessage>
                 </FormItem>
             </FormField>
 

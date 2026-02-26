@@ -16,28 +16,14 @@ const props = defineProps<{
     countries: CountryOption[];
 }>();
 
-const listingHref =
-    props.defaultType === 'supplier'
-        ? '/entities?type=supplier'
-        : props.defaultType === 'both'
-          ? '/entities?type=both'
-          : '/entities?type=customer';
-
-const sectionTitle =
-    props.defaultType === 'supplier'
-        ? 'Fornecedores'
-        : props.defaultType === 'both'
-          ? 'Entidades'
-          : 'Clientes';
-
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: sectionTitle, href: listingHref },
+    { title: 'Entidades', href: '/entities' },
     { title: 'Criar entidade', href: '/entities/create' },
 ];
 
 const form = useForm({
     type: props.defaultType,
-    tax_id: '',
+    vat: '',
     name: '',
     phone: '',
     mobile: '',

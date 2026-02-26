@@ -14,7 +14,7 @@ type CountryOption = {
 type EntityFormPayload = {
     id: number;
     type: string;
-    tax_id: string;
+    vat: string;
     name: string;
     phone: string | null;
     mobile: string | null;
@@ -34,28 +34,14 @@ const props = defineProps<{
     countries: CountryOption[];
 }>();
 
-const listingHref =
-    props.entity.type === 'supplier'
-        ? '/entities?type=supplier'
-        : props.entity.type === 'both'
-          ? '/entities?type=both'
-          : '/entities?type=customer';
-
-const sectionTitle =
-    props.entity.type === 'supplier'
-        ? 'Fornecedores'
-        : props.entity.type === 'both'
-          ? 'Entidades'
-          : 'Clientes';
-
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: sectionTitle, href: listingHref },
+    { title: 'Entidades', href: '/entities' },
     { title: 'Editar entidade', href: `/entities/${props.entity.id}/edit` },
 ];
 
 const form = useForm({
     type: props.entity.type,
-    tax_id: props.entity.tax_id,
+    vat: props.entity.vat,
     name: props.entity.name,
     phone: props.entity.phone ?? '',
     mobile: props.entity.mobile ?? '',
