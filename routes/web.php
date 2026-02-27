@@ -4,6 +4,7 @@ use App\Http\Controllers\Access\PermissionGroupController;
 use App\Http\Controllers\Access\UserManagementController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\ContactController;
+use App\Http\Controllers\DealController;
 use App\Http\Controllers\EntityController;
 use App\Http\Controllers\LogController;
 use App\Http\Controllers\TenantBillingController;
@@ -59,13 +60,7 @@ Route::middleware(['auth'])->group(function (): void {
             ->except(['show'])
             ->parameters(['calendar' => 'calendar']);
 
-        Route::get('deals', function () {
-            return Inertia::render('shared/Placeholder', [
-                'title' => 'Negocios',
-                'description' => 'Modulo em desenvolvimento.',
-            ]);
-        })->name('deals.index');
-
+        Route::resource('deals', DealController::class);
         Route::resource('people', ContactController::class)
             ->parameters(['people' => 'contact'])
             ->names('people');

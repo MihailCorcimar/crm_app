@@ -4,11 +4,13 @@ namespace App\Providers;
 
 use App\Models\CalendarEvent;
 use App\Models\Contact;
+use App\Models\Deal;
 use App\Models\Entity;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Policies\CalendarEventPolicy;
 use App\Policies\ContactPolicy;
+use App\Policies\DealPolicy;
 use App\Policies\EntityPolicy;
 use App\Policies\TenantPolicy;
 use Carbon\CarbonImmutable;
@@ -39,6 +41,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Entity::class, EntityPolicy::class);
         Gate::policy(Contact::class, ContactPolicy::class);
         Gate::policy(CalendarEvent::class, CalendarEventPolicy::class);
+        Gate::policy(Deal::class, DealPolicy::class);
 
         Gate::define('tenant.active', function (User $user): bool {
             if (! is_numeric($user->current_tenant_id)) {

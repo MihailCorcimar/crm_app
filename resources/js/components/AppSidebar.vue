@@ -28,12 +28,12 @@ const mainNavItems: NavItem[] = [
         icon: Users,
     },
     {
-        title: 'Negocios',
+        title: 'Negócios',
         href: '/deals',
         icon: BriefcaseBusiness,
     },
     {
-        title: 'Calendario',
+        title: 'Calendário',
         href: '/calendar',
         icon: Calendar,
     },
@@ -43,7 +43,7 @@ const mainNavItems: NavItem[] = [
         icon: BookOpenText,
     },
     {
-        title: 'Gestao de Acessos',
+        title: 'Gestão de Acessos',
         href: '/access/users',
         icon: Shield,
         children: [
@@ -52,7 +52,7 @@ const mainNavItems: NavItem[] = [
                 href: '/access/users',
             },
             {
-                title: 'Permissoes',
+                title: 'Permissões',
                 href: '/access/permission-groups',
             },
         ],
@@ -63,34 +63,34 @@ const mainNavItems: NavItem[] = [
         icon: Building2,
         children: [
             {
-                title: 'Gestao de tenants',
+                title: 'Gestão de tenants',
                 href: '/tenants',
             },
             {
-                title: 'Planos e faturacao',
+                title: 'Planos e faturação',
                 href: '/tenants/billing',
             },
         ],
     },
     {
-        title: 'Configuracoes',
+        title: 'Configurações',
         href: '/settings/entities/countries',
         icon: Settings,
         children: [
             {
-                title: 'Entidades - Paises',
+                title: 'Entidades - Países',
                 href: '/settings/entities/countries',
             },
             {
-                title: 'Pessoas - Funcoes',
+                title: 'Pessoas - Funções',
                 href: '/settings/contacts/roles',
             },
             {
-                title: 'Calendario - Tipos',
+                title: 'Calendário - Tipos',
                 href: '/settings/calendar/types',
             },
             {
-                title: 'Calendario - Acoes',
+                title: 'Calendário - Ações',
                 href: '/settings/calendar/actions',
             },
             {

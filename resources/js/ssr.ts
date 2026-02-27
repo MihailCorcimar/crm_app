@@ -5,7 +5,7 @@ import type { DefineComponent } from 'vue';
 import { createSSRApp, h } from 'vue';
 import { renderToString } from 'vue/server-renderer';
 
-const appName = import.meta.env.VITE_APP_NAME || 'App de Gestao';
+const appName = import.meta.env.VITE_APP_NAME || 'App de Gestão';
 
 createServer(
     (page) =>
