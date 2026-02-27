@@ -40,7 +40,7 @@ class DealRequest extends FormRequest
             ],
             'title' => ['required', 'string', 'max:255'],
             'value' => ['required', 'numeric', 'min:0'],
-            'stage' => ['required', Rule::in(['lead', 'proposal', 'negotiation', 'follow_up', 'won', 'lost'])],
+            'stage' => ['required', Rule::in(Deal::stages())],
             'probability' => ['required', 'integer', 'between:0,100'],
             'expected_close_date' => ['nullable', 'date'],
             'owner_id' => [

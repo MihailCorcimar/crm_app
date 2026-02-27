@@ -11,6 +11,13 @@ class Deal extends Model
 {
     use BelongsToTenant, HasFactory;
 
+    public const STAGE_LEAD = 'lead';
+    public const STAGE_PROPOSAL = 'proposal';
+    public const STAGE_NEGOTIATION = 'negotiation';
+    public const STAGE_FOLLOW_UP = 'follow_up';
+    public const STAGE_WON = 'won';
+    public const STAGE_LOST = 'lost';
+
     /**
      * @var list<string>
      */
@@ -52,5 +59,20 @@ class Deal extends Model
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'owner_id');
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function stages(): array
+    {
+        return [
+            self::STAGE_LEAD,
+            self::STAGE_PROPOSAL,
+            self::STAGE_NEGOTIATION,
+            self::STAGE_FOLLOW_UP,
+            self::STAGE_WON,
+            self::STAGE_LOST,
+        ];
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\DealRequest;
+use App\Http\Requests\DealStageRequest;
 use App\Models\Deal;
 use App\Models\Entity;
 use App\Models\User;
@@ -20,24 +21,37 @@ class DealController extends Controller
 
     public function index(): Response
     {
+        $stageOptions = $this->stageOptions();
+
         $deals = Deal::query()
             ->with(['entity:id,name', 'owner:id,name'])
-            ->latest()
-            ->paginate(10)
-            ->withQueryString()
-            ->through(fn (Deal $deal): array => [
-                'id' => $deal->id,
-                'title' => $deal->title,
-                'entity' => $deal->entity?->name,
-                'stage' => $deal->stage,
-                'value' => (float) $deal->value,
-                'probability' => (int) $deal->probability,
-                'expected_close_date' => $deal->expected_close_date?->format('Y-m-d'),
-                'owner' => $deal->owner?->name,
-            ]);
+            ->orderByDesc('updated_at')
+            ->get();
+
+        $columns = collect($stageOptions)
+            ->map(function (array $stageOption) use ($deals): array {
+                $stageDeals = $deals
+                    ->filter(fn (Deal $deal): bool => $deal->stage === $stageOption['value'])
+                    ->values();
+
+                $cards = $stageDeals
+                    ->map(fn (Deal $deal): array => $this->dealCardPayload($deal))
+                    ->all();
+
+                return [
+                    'stage' => $stageOption['value'],
+                    'label' => $stageOption['label'],
+                    'count' => count($cards),
+                    'total_value' => (float) $stageDeals->sum(fn (Deal $deal): float => (float) $deal->value),
+                    'deals' => $cards,
+                ];
+            })
+            ->values()
+            ->all();
 
         return Inertia::render('deals/Index', [
-            'deals' => $deals,
+            'columns' => $columns,
+            'stageOptions' => $stageOptions,
         ]);
     }
 
@@ -100,6 +114,15 @@ class DealController extends Controller
     public function update(DealRequest $request, Deal $deal): RedirectResponse
     {
         $deal->update($this->payload($request->validated()));
+
+        return to_route('deals.index');
+    }
+
+    public function updateStage(DealStageRequest $request, Deal $deal): RedirectResponse
+    {
+        $deal->update([
+            'stage' => $request->string('stage')->toString(),
+        ]);
 
         return to_route('deals.index');
     }
@@ -172,12 +195,29 @@ class DealController extends Controller
     private function stageOptions(): array
     {
         return [
-            ['value' => 'lead', 'label' => 'Lead'],
-            ['value' => 'proposal', 'label' => 'Proposta'],
-            ['value' => 'negotiation', 'label' => 'Negociação'],
-            ['value' => 'follow_up', 'label' => 'Follow Up'],
-            ['value' => 'won', 'label' => 'Ganho'],
-            ['value' => 'lost', 'label' => 'Perdido'],
+            ['value' => Deal::STAGE_LEAD, 'label' => 'Lead'],
+            ['value' => Deal::STAGE_PROPOSAL, 'label' => 'Proposta'],
+            ['value' => Deal::STAGE_NEGOTIATION, 'label' => 'Negociação'],
+            ['value' => Deal::STAGE_FOLLOW_UP, 'label' => 'Follow Up'],
+            ['value' => Deal::STAGE_WON, 'label' => 'Ganho'],
+            ['value' => Deal::STAGE_LOST, 'label' => 'Perdido'],
+        ];
+    }
+
+    /**
+     * @return array{id: int, title: string, entity: string|null, stage: string, value: float, probability: int, expected_close_date: string|null, owner: string|null}
+     */
+    private function dealCardPayload(Deal $deal): array
+    {
+        return [
+            'id' => $deal->id,
+            'title' => $deal->title,
+            'entity' => $deal->entity?->name,
+            'stage' => $deal->stage,
+            'value' => (float) $deal->value,
+            'probability' => (int) $deal->probability,
+            'expected_close_date' => $deal->expected_close_date?->format('Y-m-d'),
+            'owner' => $deal->owner?->name,
         ];
     }
 }

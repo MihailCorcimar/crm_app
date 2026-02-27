@@ -60,6 +60,7 @@ Route::middleware(['auth'])->group(function (): void {
             ->except(['show'])
             ->parameters(['calendar' => 'calendar']);
 
+        Route::patch('deals/{deal}/stage', [DealController::class, 'updateStage'])->name('deals.stage.update');
         Route::resource('deals', DealController::class);
         Route::resource('people', ContactController::class)
             ->parameters(['people' => 'contact'])
