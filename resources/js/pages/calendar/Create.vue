@@ -10,17 +10,24 @@ type SelectOption = {
     name: string;
 };
 
+type EventableTypeOption = {
+    value: 'entity' | 'person' | 'deal';
+    label: string;
+};
+
 const props = defineProps<{
-    users: SelectOption[];
+    owners: SelectOption[];
+    eventableTypes: EventableTypeOption[];
     entities: SelectOption[];
+    people: SelectOption[];
+    deals: SelectOption[];
     types: SelectOption[];
     actions: SelectOption[];
     defaults: {
-        event_date: string;
-        event_time: string;
-        duration_minutes: number;
+        start_at: string;
+        end_at: string;
         status: string;
-        user_id: number | null;
+        owner_id: number | null;
     };
 }>();
 
@@ -30,16 +37,19 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const form = useForm({
-    event_date: props.defaults.event_date,
-    event_time: props.defaults.event_time,
-    duration_minutes: props.defaults.duration_minutes,
-    share: '',
-    knowledge: '',
-    entity_id: '' as number | '',
-    user_id: props.defaults.user_id ?? '',
+    title: '',
+    description: '',
+    start_at: props.defaults.start_at,
+    end_at: props.defaults.end_at,
+    location: '',
+    owner_id: props.defaults.owner_id ?? '',
+    eventable_type: '' as '' | 'entity' | 'person' | 'deal',
+    eventable_id: '' as number | '',
     calendar_type_id: '' as number | '',
     calendar_action_id: '' as number | '',
-    description: '',
+    attendee_entity_ids: [] as number[],
+    attendee_person_ids: [] as number[],
+    attendee_deal_ids: [] as number[],
     status: props.defaults.status,
 });
 
@@ -60,8 +70,11 @@ function submit(): void {
                 <CardContent>
                     <CalendarEventForm
                         :form="form"
-                        :users="users"
+                        :owners="owners"
+                        :eventable-types="eventableTypes"
                         :entities="entities"
+                        :people="people"
+                        :deals="deals"
                         :types="types"
                         :actions="actions"
                         submit-label="Criar"

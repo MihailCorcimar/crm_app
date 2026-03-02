@@ -10,25 +10,36 @@ type SelectOption = {
     name: string;
 };
 
+type EventableTypeOption = {
+    value: 'entity' | 'person' | 'deal';
+    label: string;
+};
+
 type EventPayload = {
     id: number;
-    event_date: string;
-    event_time: string;
-    duration_minutes: number;
-    share: string | null;
-    knowledge: string | null;
-    entity_id: number | null;
-    user_id: number | null;
+    title: string | null;
+    description: string | null;
+    start_at: string;
+    end_at: string;
+    location: string | null;
+    owner_id: number | null;
+    eventable_type: '' | 'entity' | 'person' | 'deal' | null;
+    eventable_id: number | null;
     calendar_type_id: number | null;
     calendar_action_id: number | null;
-    description: string | null;
+    attendee_entity_ids: number[];
+    attendee_person_ids: number[];
+    attendee_deal_ids: number[];
     status: string;
 };
 
 const props = defineProps<{
     event: EventPayload;
-    users: SelectOption[];
+    owners: SelectOption[];
+    eventableTypes: EventableTypeOption[];
     entities: SelectOption[];
+    people: SelectOption[];
+    deals: SelectOption[];
     types: SelectOption[];
     actions: SelectOption[];
 }>();
@@ -39,16 +50,19 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const form = useForm({
-    event_date: props.event.event_date,
-    event_time: props.event.event_time,
-    duration_minutes: props.event.duration_minutes,
-    share: props.event.share ?? '',
-    knowledge: props.event.knowledge ?? '',
-    entity_id: props.event.entity_id ?? '',
-    user_id: props.event.user_id ?? '',
+    title: props.event.title ?? '',
+    description: props.event.description ?? '',
+    start_at: props.event.start_at,
+    end_at: props.event.end_at,
+    location: props.event.location ?? '',
+    owner_id: props.event.owner_id ?? '',
+    eventable_type: (props.event.eventable_type ?? '') as '' | 'entity' | 'person' | 'deal',
+    eventable_id: props.event.eventable_id ?? '',
     calendar_type_id: props.event.calendar_type_id ?? '',
     calendar_action_id: props.event.calendar_action_id ?? '',
-    description: props.event.description ?? '',
+    attendee_entity_ids: props.event.attendee_entity_ids ?? [],
+    attendee_person_ids: props.event.attendee_person_ids ?? [],
+    attendee_deal_ids: props.event.attendee_deal_ids ?? [],
     status: props.event.status,
 });
 
@@ -69,8 +83,11 @@ function submit(): void {
                 <CardContent>
                     <CalendarEventForm
                         :form="form"
-                        :users="users"
+                        :owners="owners"
+                        :eventable-types="eventableTypes"
                         :entities="entities"
+                        :people="people"
+                        :deals="deals"
                         :types="types"
                         :actions="actions"
                         submit-label="Guardar"

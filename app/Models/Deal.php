@@ -6,6 +6,7 @@ use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Deal extends Model
 {
@@ -74,5 +75,21 @@ class Deal extends Model
             self::STAGE_WON,
             self::STAGE_LOST,
         ];
+    }
+
+    /**
+     * @return MorphMany<CalendarEvent, $this>
+     */
+    public function linkedCalendarEvents(): MorphMany
+    {
+        return $this->morphMany(CalendarEvent::class, 'eventable');
+    }
+
+    /**
+     * @return MorphMany<CalendarEventAttendee, $this>
+     */
+    public function calendarEventAttendances(): MorphMany
+    {
+        return $this->morphMany(CalendarEventAttendee::class, 'attendee');
     }
 }

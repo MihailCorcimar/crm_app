@@ -17,40 +17,47 @@ type SelectOption = {
     name: string;
 };
 
+type EventableTypeOption = {
+    value: 'entity' | 'person' | 'deal';
+    label: string;
+};
+
 type CalendarEventItem = {
     id: number;
     title: string;
     start: string;
     end: string;
     extendedProps: {
-        entity: string | null;
-        user: string | null;
+        owner: string | null;
         type: string | null;
         action: string | null;
+        eventable: string;
+        attendees_count: number;
         status: string;
     };
 };
 
 type CalendarRow = {
     id: number;
-    event_date: string | null;
-    event_time: string | null;
-    duration_minutes: number;
-    entity: string | null;
-    user: string | null;
+    title: string | null;
+    start_at: string;
+    end_at: string;
+    eventable: string;
+    owner: string | null;
     type: string | null;
     action: string | null;
+    attendees_count: number;
     status: string;
 };
 
 const props = defineProps<{
     events: CalendarEventItem[];
     rows: CalendarRow[];
-    users: SelectOption[];
-    entities: SelectOption[];
+    owners: SelectOption[];
+    eventableTypes: EventableTypeOption[];
     filters: {
-        user_id: string | number;
-        entity_id: string | number;
+        owner_id: string | number;
+        eventable_type: string;
     };
 }>();
 
@@ -58,14 +65,14 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Calendario', href: '/calendar' },
 ];
 
-const selectedUserId = ref<string>(String(props.filters.user_id ?? ''));
-const selectedEntityId = ref<string>(String(props.filters.entity_id ?? ''));
+const selectedOwnerId = ref<string>(String(props.filters.owner_id ?? ''));
+const selectedEventableType = ref<string>(String(props.filters.eventable_type ?? ''));
 
 watch(
     () => props.filters,
     (value) => {
-        selectedUserId.value = String(value.user_id ?? '');
-        selectedEntityId.value = String(value.entity_id ?? '');
+        selectedOwnerId.value = String(value.owner_id ?? '');
+        selectedEventableType.value = String(value.eventable_type ?? '');
     },
 );
 
@@ -85,12 +92,16 @@ const calendarOptions = ref({
 });
 
 function applyFilters(): void {
-    router.get('/calendar', {
-        user_id: selectedUserId.value || '',
-        entity_id: selectedEntityId.value || '',
-    }, {
-        preserveState: true,
-    });
+    router.get(
+        '/calendar',
+        {
+            owner_id: selectedOwnerId.value || '',
+            eventable_type: selectedEventableType.value || '',
+        },
+        {
+            preserveState: true,
+        },
+    );
 }
 
 function deleteEvent(event: CalendarRow): void {
@@ -104,12 +115,14 @@ function deleteEvent(event: CalendarRow): void {
 }
 
 const columns: ColumnDef<CalendarRow>[] = [
-    { accessorKey: 'event_date', header: 'Data', cell: ({ row }: { row: { original: CalendarRow } }) => row.original.event_date ?? '-' },
-    { accessorKey: 'event_time', header: 'Hora', cell: ({ row }: { row: { original: CalendarRow } }) => row.original.event_time ?? '-' },
-    { accessorKey: 'entity', header: 'Entidade', cell: ({ row }: { row: { original: CalendarRow } }) => row.original.entity ?? '-' },
-    { accessorKey: 'user', header: 'Utilizador', cell: ({ row }: { row: { original: CalendarRow } }) => row.original.user ?? '-' },
+    { accessorKey: 'title', header: 'Titulo', cell: ({ row }: { row: { original: CalendarRow } }) => row.original.title ?? '-' },
+    { accessorKey: 'start_at', header: 'Inicio', cell: ({ row }: { row: { original: CalendarRow } }) => row.original.start_at },
+    { accessorKey: 'end_at', header: 'Fim', cell: ({ row }: { row: { original: CalendarRow } }) => row.original.end_at },
+    { accessorKey: 'eventable', header: 'Associacao', cell: ({ row }: { row: { original: CalendarRow } }) => row.original.eventable },
+    { accessorKey: 'owner', header: 'Responsavel', cell: ({ row }: { row: { original: CalendarRow } }) => row.original.owner ?? '-' },
     { accessorKey: 'type', header: 'Tipo', cell: ({ row }: { row: { original: CalendarRow } }) => row.original.type ?? '-' },
     { accessorKey: 'action', header: 'Acao', cell: ({ row }: { row: { original: CalendarRow } }) => row.original.action ?? '-' },
+    { accessorKey: 'attendees_count', header: 'Attendees', cell: ({ row }: { row: { original: CalendarRow } }) => row.original.attendees_count },
     { accessorKey: 'status', header: 'Estado', cell: ({ row }: { row: { original: CalendarRow } }) => (row.original.status === 'active' ? 'Ativo' : 'Inativo') },
     {
         id: 'actions',
@@ -161,27 +174,27 @@ const columns: ColumnDef<CalendarRow>[] = [
                 <CardContent class="space-y-4">
                     <form class="grid gap-4 md:grid-cols-3" @submit.prevent="applyFilters">
                         <div class="grid gap-2">
-                            <label class="text-sm font-medium">Filtrar por Utilizador</label>
+                            <label class="text-sm font-medium">Filtrar por Responsavel</label>
                             <select
-                                v-model="selectedUserId"
+                                v-model="selectedOwnerId"
                                 class="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none"
                             >
                                 <option value="">Todos</option>
-                                <option v-for="user in users" :key="user.id" :value="String(user.id)">
-                                    {{ user.name }}
+                                <option v-for="owner in owners" :key="owner.id" :value="String(owner.id)">
+                                    {{ owner.name }}
                                 </option>
                             </select>
                         </div>
 
                         <div class="grid gap-2">
-                            <label class="text-sm font-medium">Filtrar por Entidade</label>
+                            <label class="text-sm font-medium">Filtrar por Associacao</label>
                             <select
-                                v-model="selectedEntityId"
+                                v-model="selectedEventableType"
                                 class="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none"
                             >
                                 <option value="">Todas</option>
-                                <option v-for="entity in entities" :key="entity.id" :value="String(entity.id)">
-                                    {{ entity.name }}
+                                <option v-for="eventableType in eventableTypes" :key="eventableType.value" :value="eventableType.value">
+                                    {{ eventableType.label }}
                                 </option>
                             </select>
                         </div>

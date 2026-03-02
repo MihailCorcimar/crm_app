@@ -7,6 +7,8 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 class CalendarEvent extends Model
 {
@@ -17,17 +19,24 @@ class CalendarEvent extends Model
      */
     protected $fillable = [
         'tenant_id',
+        'title',
+        'description',
+        'start_at',
+        'end_at',
+        'location',
+        'owner_id',
+        'eventable_type',
+        'eventable_id',
+        'status',
         'event_date',
         'event_time',
         'duration_minutes',
         'share',
         'knowledge',
-        'entity_id',
         'user_id',
         'calendar_type_id',
         'calendar_action_id',
-        'description',
-        'status',
+        'entity_id',
     ];
 
     /**
@@ -36,6 +45,8 @@ class CalendarEvent extends Model
     protected function casts(): array
     {
         return [
+            'start_at' => 'datetime',
+            'end_at' => 'datetime',
             'event_date' => 'date',
             'duration_minutes' => 'integer',
         ];
@@ -43,6 +54,10 @@ class CalendarEvent extends Model
 
     public function startAt(): CarbonImmutable
     {
+        if ($this->start_at !== null) {
+            return CarbonImmutable::instance($this->start_at);
+        }
+
         return CarbonImmutable::parse(sprintf(
             '%s %s',
             $this->event_date?->format('Y-m-d'),
@@ -52,15 +67,35 @@ class CalendarEvent extends Model
 
     public function endAt(): CarbonImmutable
     {
+        if ($this->end_at !== null) {
+            return CarbonImmutable::instance($this->end_at);
+        }
+
         return $this->startAt()->addMinutes($this->duration_minutes);
     }
 
     /**
-     * @return BelongsTo<Entity, $this>
+     * @return MorphTo<Model, $this>
      */
-    public function entity(): BelongsTo
+    public function eventable(): MorphTo
     {
-        return $this->belongsTo(Entity::class);
+        return $this->morphTo();
+    }
+
+    /**
+     * @return HasMany<CalendarEventAttendee, $this>
+     */
+    public function attendees(): HasMany
+    {
+        return $this->hasMany(CalendarEventAttendee::class);
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function owner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'owner_id');
     }
 
     /**
