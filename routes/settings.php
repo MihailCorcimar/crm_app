@@ -5,6 +5,7 @@ use App\Http\Controllers\Settings\CountryController;
 use App\Http\Controllers\Settings\CompanySettingController;
 use App\Http\Controllers\Settings\CalendarActionController;
 use App\Http\Controllers\Settings\CalendarTypeController;
+use App\Http\Controllers\Settings\DealStageController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\TwoFactorAuthenticationController;
@@ -56,6 +57,11 @@ Route::middleware(['auth', 'tenant.active'])->group(function () {
         ->name('settings.calendar-actions.update');
     Route::delete('settings/calendar/actions/{calendarAction}', [CalendarActionController::class, 'destroy'])
         ->name('settings.calendar-actions.destroy');
+
+    Route::get('settings/deals/stages', [DealStageController::class, 'index'])
+        ->name('settings.deal-stages.index');
+    Route::put('settings/deals/stages', [DealStageController::class, 'update'])
+        ->name('settings.deal-stages.update');
 
 });
 

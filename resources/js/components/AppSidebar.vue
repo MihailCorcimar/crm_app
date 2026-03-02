@@ -94,6 +94,10 @@ const mainNavItems: NavItem[] = [
                 href: '/settings/calendar/actions',
             },
             {
+                title: 'Negócios - Etapas',
+                href: '/settings/deals/stages',
+            },
+            {
                 title: 'Empresa',
                 href: '/settings/company',
             },

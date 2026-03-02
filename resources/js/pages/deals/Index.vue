@@ -1,10 +1,16 @@
 <script setup lang="ts">
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
+
+type SelectOption = {
+    id: number;
+    name: string;
+};
 
 type DealCard = {
     id: number;
@@ -25,11 +31,29 @@ type KanbanColumn = {
     deals: DealCard[];
 };
 
+type KanbanFilters = {
+    owner_id: number | null;
+    expected_close_from: string | null;
+    expected_close_to: string | null;
+    value_min: number | null;
+    value_max: number | null;
+};
+
 const props = defineProps<{
     columns: KanbanColumn[];
+    owners: SelectOption[];
+    filters: KanbanFilters;
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Negócios', href: '/deals' }];
+
+const filterForm = useForm({
+    owner_id: props.filters.owner_id ?? '',
+    expected_close_from: props.filters.expected_close_from ?? '',
+    expected_close_to: props.filters.expected_close_to ?? '',
+    value_min: props.filters.value_min ?? '',
+    value_max: props.filters.value_max ?? '',
+});
 
 const localColumns = ref<KanbanColumn[]>(cloneColumns(props.columns));
 const draggingDealId = ref<number | null>(null);
@@ -61,6 +85,24 @@ function formatCurrency(value: number): string {
         style: 'currency',
         currency: 'EUR',
     }).format(value);
+}
+
+function applyFilters(): void {
+    filterForm.get('/deals', {
+        preserveState: true,
+        preserveScroll: true,
+        replace: true,
+    });
+}
+
+function clearFilters(): void {
+    filterForm.owner_id = '';
+    filterForm.expected_close_from = '';
+    filterForm.expected_close_to = '';
+    filterForm.value_min = '';
+    filterForm.value_max = '';
+
+    applyFilters();
 }
 
 function updateColumnStats(stage: string): void {
@@ -189,6 +231,53 @@ function onDrop(event: DragEvent, stage: string): void {
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
+            <Card>
+                <CardHeader>
+                    <CardTitle>Filtros do Kanban</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <form class="grid gap-3 md:grid-cols-5" @submit.prevent="applyFilters">
+                        <div class="grid gap-1">
+                            <label class="text-sm font-medium">Responsável</label>
+                            <select
+                                v-model="filterForm.owner_id"
+                                class="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none"
+                            >
+                                <option :value="''">Todos</option>
+                                <option v-for="owner in owners" :key="owner.id" :value="owner.id">
+                                    {{ owner.name }}
+                                </option>
+                            </select>
+                        </div>
+
+                        <div class="grid gap-1">
+                            <label class="text-sm font-medium">Data prevista (de)</label>
+                            <Input v-model="filterForm.expected_close_from" type="date" />
+                        </div>
+
+                        <div class="grid gap-1">
+                            <label class="text-sm font-medium">Data prevista (até)</label>
+                            <Input v-model="filterForm.expected_close_to" type="date" />
+                        </div>
+
+                        <div class="grid gap-1">
+                            <label class="text-sm font-medium">Valor mínimo</label>
+                            <Input v-model="filterForm.value_min" type="number" min="0" step="0.01" placeholder="0.00" />
+                        </div>
+
+                        <div class="grid gap-1">
+                            <label class="text-sm font-medium">Valor máximo</label>
+                            <Input v-model="filterForm.value_max" type="number" min="0" step="0.01" placeholder="10000.00" />
+                        </div>
+
+                        <div class="flex gap-2 md:col-span-5">
+                            <Button type="submit" :disabled="filterForm.processing">Aplicar filtros</Button>
+                            <Button type="button" variant="outline" :disabled="filterForm.processing" @click="clearFilters">Limpar</Button>
+                        </div>
+                    </form>
+                </CardContent>
+            </Card>
+
             <Card>
                 <CardHeader class="flex flex-row items-center justify-between">
                     <div class="space-y-1">

@@ -7,24 +7,71 @@ use App\Http\Requests\DealStageRequest;
 use App\Models\Deal;
 use App\Models\Entity;
 use App\Models\User;
+use App\Support\DealStageService;
 use App\Support\TenantContext;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class DealController extends Controller
 {
-    public function __construct()
+    public function __construct(private readonly DealStageService $dealStageService)
     {
         $this->authorizeResource(Deal::class, 'deal');
     }
 
-    public function index(): Response
+    public function index(Request $request): Response
     {
+        $tenantId = TenantContext::id($request) ?? 0;
+
+        $validated = $request->validate([
+            'owner_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('users', 'id')->where(function ($query) use ($tenantId): void {
+                    $query->whereExists(function ($subQuery) use ($tenantId): void {
+                        $subQuery
+                            ->select(DB::raw(1))
+                            ->from('tenant_user')
+                            ->whereColumn('tenant_user.user_id', 'users.id')
+                            ->where('tenant_user.tenant_id', $tenantId);
+                    });
+                }),
+            ],
+            'expected_close_from' => ['nullable', 'date'],
+            'expected_close_to' => ['nullable', 'date', 'after_or_equal:expected_close_from'],
+            'value_min' => ['nullable', 'numeric', 'min:0'],
+            'value_max' => ['nullable', 'numeric', 'gte:value_min'],
+        ]);
+
         $stageOptions = $this->stageOptions();
+        $filters = $this->normalizedFilters($validated);
 
         $deals = Deal::query()
             ->with(['entity:id,name', 'owner:id,name'])
+            ->when(
+                $filters['owner_id'] !== null,
+                fn ($query) => $query->where('owner_id', $filters['owner_id'])
+            )
+            ->when(
+                $filters['expected_close_from'] !== null,
+                fn ($query) => $query->whereDate('expected_close_date', '>=', $filters['expected_close_from'])
+            )
+            ->when(
+                $filters['expected_close_to'] !== null,
+                fn ($query) => $query->whereDate('expected_close_date', '<=', $filters['expected_close_to'])
+            )
+            ->when(
+                $filters['value_min'] !== null,
+                fn ($query) => $query->where('value', '>=', $filters['value_min'])
+            )
+            ->when(
+                $filters['value_max'] !== null,
+                fn ($query) => $query->where('value', '<=', $filters['value_max'])
+            )
             ->orderByDesc('updated_at')
             ->get();
 
@@ -52,6 +99,8 @@ class DealController extends Controller
         return Inertia::render('deals/Index', [
             'columns' => $columns,
             'stageOptions' => $stageOptions,
+            'owners' => $this->owners(),
+            'filters' => $filters,
         ]);
     }
 
@@ -124,7 +173,7 @@ class DealController extends Controller
             'stage' => $request->string('stage')->toString(),
         ]);
 
-        return to_route('deals.index');
+        return back();
     }
 
     public function destroy(Deal $deal): RedirectResponse
@@ -194,13 +243,27 @@ class DealController extends Controller
      */
     private function stageOptions(): array
     {
+        return collect($this->dealStageService->forTenant(TenantContext::id()))
+            ->map(fn (array $stage): array => [
+                'value' => (string) $stage['value'],
+                'label' => (string) $stage['label'],
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array{owner_id: int|null, expected_close_from: string|null, expected_close_to: string|null, value_min: float|null, value_max: float|null}
+     */
+    private function normalizedFilters(array $validated): array
+    {
         return [
-            ['value' => Deal::STAGE_LEAD, 'label' => 'Lead'],
-            ['value' => Deal::STAGE_PROPOSAL, 'label' => 'Proposta'],
-            ['value' => Deal::STAGE_NEGOTIATION, 'label' => 'Negociação'],
-            ['value' => Deal::STAGE_FOLLOW_UP, 'label' => 'Follow Up'],
-            ['value' => Deal::STAGE_WON, 'label' => 'Ganho'],
-            ['value' => Deal::STAGE_LOST, 'label' => 'Perdido'],
+            'owner_id' => isset($validated['owner_id']) ? (int) $validated['owner_id'] : null,
+            'expected_close_from' => isset($validated['expected_close_from']) ? (string) $validated['expected_close_from'] : null,
+            'expected_close_to' => isset($validated['expected_close_to']) ? (string) $validated['expected_close_to'] : null,
+            'value_min' => isset($validated['value_min']) ? (float) $validated['value_min'] : null,
+            'value_max' => isset($validated['value_max']) ? (float) $validated['value_max'] : null,
         ];
     }
 
