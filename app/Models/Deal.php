@@ -32,6 +32,12 @@ class Deal extends Model
         'probability',
         'expected_close_date',
         'owner_id',
+        'proposal_path',
+        'proposal_original_name',
+        'proposal_mime_type',
+        'proposal_size',
+        'proposal_uploaded_at',
+        'proposal_uploaded_by',
     ];
 
     /**
@@ -43,6 +49,8 @@ class Deal extends Model
             'value' => 'decimal:2',
             'probability' => 'integer',
             'expected_close_date' => 'date',
+            'proposal_size' => 'integer',
+            'proposal_uploaded_at' => 'datetime',
         ];
     }
 
@@ -60,6 +68,14 @@ class Deal extends Model
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'owner_id');
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function proposalUploader(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'proposal_uploaded_by');
     }
 
     /**

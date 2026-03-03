@@ -62,6 +62,8 @@ Route::middleware(['auth'])->group(function (): void {
 
         Route::patch('deals/{deal}/stage', [DealController::class, 'updateStage'])->name('deals.stage.update');
         Route::post('deals/{deal}/quick-activity', [DealController::class, 'storeQuickActivity'])->name('deals.quick-activity.store');
+        Route::post('deals/{deal}/proposal', [DealController::class, 'storeProposal'])->name('deals.proposal.store');
+        Route::get('deals/{deal}/proposal/download', [DealController::class, 'downloadProposal'])->name('deals.proposal.download');
         Route::resource('deals', DealController::class);
         Route::resource('people', ContactController::class)
             ->parameters(['people' => 'contact'])

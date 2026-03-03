@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
+import { ref } from 'vue';
 
 type DealShowPayload = {
     id: number;
@@ -17,6 +18,15 @@ type DealShowPayload = {
     owner: string | null;
     created_at: string | null;
     updated_at: string | null;
+    proposal: {
+        has_file: boolean;
+        file_name: string | null;
+        mime_type: string | null;
+        size_label: string | null;
+        uploaded_at: string | null;
+        uploaded_by: string | null;
+        download_url: string | null;
+    };
 };
 
 type QuickActivityType = {
@@ -64,6 +74,14 @@ const quickForm = useForm({
     description: '',
 });
 
+const proposalForm = useForm<{
+    proposal_file: File | null;
+}>({
+    proposal_file: null,
+});
+
+const proposalInput = ref<HTMLInputElement | null>(null);
+
 function stageLabel(stage: string): string {
     const map: Record<string, string> = {
         lead: 'Lead',
@@ -108,6 +126,32 @@ function submitQuickActivity(): void {
         },
     });
 }
+
+function onProposalSelected(event: Event): void {
+    const input = event.target as HTMLInputElement | null;
+    proposalForm.proposal_file = input?.files?.[0] ?? null;
+}
+
+function openProposalPicker(): void {
+    proposalInput.value?.click();
+}
+
+function proposalFileLabel(): string {
+    return proposalForm.proposal_file?.name ?? 'Nenhum ficheiro selecionado';
+}
+
+function submitProposal(): void {
+    proposalForm.post(`/deals/${props.deal.id}/proposal`, {
+        forceFormData: true,
+        preserveScroll: true,
+        onSuccess: () => {
+            proposalForm.reset('proposal_file');
+            if (proposalInput.value !== null) {
+                proposalInput.value.value = '';
+            }
+        },
+    });
+}
 </script>
 
 <template>
@@ -142,6 +186,56 @@ function submitQuickActivity(): void {
                         <div><dt class="text-sm text-muted-foreground">Criado em</dt><dd>{{ deal.created_at || '-' }}</dd></div>
                         <div><dt class="text-sm text-muted-foreground">Atualizado em</dt><dd>{{ deal.updated_at || '-' }}</dd></div>
                     </dl>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Proposta</CardTitle>
+                </CardHeader>
+                <CardContent class="space-y-4">
+                    <div v-if="deal.proposal.has_file" class="rounded-md border p-3 text-sm">
+                        <p><span class="font-medium">Ficheiro:</span> {{ deal.proposal.file_name || '-' }}</p>
+                        <p><span class="font-medium">Tamanho:</span> {{ deal.proposal.size_label || '-' }}</p>
+                        <p><span class="font-medium">Enviado em:</span> {{ deal.proposal.uploaded_at || '-' }}</p>
+                        <p><span class="font-medium">Responsável:</span> {{ deal.proposal.uploaded_by || '-' }}</p>
+
+                        <div class="mt-3">
+                            <Button v-if="deal.proposal.download_url" variant="outline" as-child>
+                                <a :href="deal.proposal.download_url">Descarregar proposta</a>
+                            </Button>
+                        </div>
+                    </div>
+                    <p v-else class="text-sm text-muted-foreground">
+                        Ainda não existe proposta carregada para este negócio.
+                    </p>
+
+                    <form class="grid gap-3 md:grid-cols-[1fr_auto]" @submit.prevent="submitProposal">
+                        <div class="grid gap-2">
+                            <label class="text-sm font-medium">Carregar proposta</label>
+                            <input
+                                ref="proposalInput"
+                                class="hidden"
+                                type="file"
+                                accept=".pdf,.doc,.docx,.odt"
+                                @change="onProposalSelected"
+                            />
+                            <div class="flex h-10 items-center gap-2 rounded-md border px-2">
+                                <Button type="button" variant="outline" @click="openProposalPicker">
+                                    Escolher ficheiro
+                                </Button>
+                                <span class="truncate text-sm text-muted-foreground">{{ proposalFileLabel() }}</span>
+                            </div>
+                            <p v-if="proposalForm.errors.proposal_file" class="text-destructive text-sm">
+                                {{ proposalForm.errors.proposal_file }}
+                            </p>
+                        </div>
+                        <div class="flex items-end">
+                            <Button type="submit" :disabled="proposalForm.processing || !proposalForm.proposal_file">
+                                Guardar proposta
+                            </Button>
+                        </div>
+                    </form>
                 </CardContent>
             </Card>
 

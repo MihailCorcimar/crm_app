@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\DealProposalUploadRequest;
 use App\Http\Requests\DealQuickActivityRequest;
 use App\Http\Requests\DealRequest;
 use App\Http\Requests\DealStageRequest;
@@ -15,6 +16,8 @@ use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -126,7 +129,7 @@ class DealController extends Controller
 
     public function show(Deal $deal): Response
     {
-        $deal->load(['entity:id,name', 'owner:id,name']);
+        $deal->load(['entity:id,name', 'owner:id,name', 'proposalUploader:id,name']);
 
         return Inertia::render('deals/Show', [
             'deal' => [
@@ -140,6 +143,7 @@ class DealController extends Controller
                 'owner' => $deal->owner?->name,
                 'created_at' => $deal->created_at?->format('d/m/Y H:i'),
                 'updated_at' => $deal->updated_at?->format('d/m/Y H:i'),
+                'proposal' => $this->proposalPayload($deal),
             ],
             'timeline' => $this->timeline($deal),
             'quickActivityTypes' => $this->quickActivityTypes(),
@@ -150,6 +154,46 @@ class DealController extends Controller
             ],
             'owners' => $this->owners(),
         ]);
+    }
+
+    public function storeProposal(DealProposalUploadRequest $request, Deal $deal): RedirectResponse
+    {
+        $file = $request->file('proposal_file');
+        if ($file === null) {
+            return back();
+        }
+
+        if (is_string($deal->proposal_path) && $deal->proposal_path !== '') {
+            Storage::disk('local')->delete($deal->proposal_path);
+        }
+
+        $extension = strtolower((string) $file->getClientOriginalExtension());
+        $filename = sprintf('%s-%s.%s', now()->format('YmdHis'), Str::uuid(), $extension);
+        $path = $file->storeAs(sprintf('deals/%d/proposals', $deal->id), $filename, 'local');
+
+        $deal->update([
+            'proposal_path' => $path,
+            'proposal_original_name' => $file->getClientOriginalName(),
+            'proposal_mime_type' => $file->getClientMimeType(),
+            'proposal_size' => $file->getSize(),
+            'proposal_uploaded_at' => now(),
+            'proposal_uploaded_by' => auth()->id(),
+        ]);
+
+        return back();
+    }
+
+    public function downloadProposal(Deal $deal): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $this->authorize('view', $deal);
+
+        abort_unless(is_string($deal->proposal_path) && $deal->proposal_path !== '', 404);
+        abort_unless(Storage::disk('local')->exists($deal->proposal_path), 404);
+
+        return Storage::disk('local')->download(
+            $deal->proposal_path,
+            $deal->proposal_original_name ?: basename($deal->proposal_path)
+        );
     }
 
     public function edit(Deal $deal): Response
@@ -437,5 +481,36 @@ class DealController extends Controller
     {
         return collect($this->stageOptions())
             ->firstWhere('value', $stage)['label'] ?? $stage;
+    }
+
+    /**
+     * @return array{has_file: bool, file_name: string|null, mime_type: string|null, size_label: string|null, uploaded_at: string|null, uploaded_by: string|null, download_url: string|null}
+     */
+    private function proposalPayload(Deal $deal): array
+    {
+        $hasFile = is_string($deal->proposal_path) && $deal->proposal_path !== '';
+
+        return [
+            'has_file' => $hasFile,
+            'file_name' => $hasFile ? $deal->proposal_original_name : null,
+            'mime_type' => $hasFile ? $deal->proposal_mime_type : null,
+            'size_label' => $hasFile ? $this->formatBytes((int) ($deal->proposal_size ?? 0)) : null,
+            'uploaded_at' => $deal->proposal_uploaded_at?->format('d/m/Y H:i'),
+            'uploaded_by' => $deal->proposalUploader?->name,
+            'download_url' => $hasFile ? route('deals.proposal.download', $deal) : null,
+        ];
+    }
+
+    private function formatBytes(int $bytes): string
+    {
+        if ($bytes < 1024) {
+            return sprintf('%d B', $bytes);
+        }
+
+        if ($bytes < 1024 * 1024) {
+            return sprintf('%.1f KB', $bytes / 1024);
+        }
+
+        return sprintf('%.2f MB', $bytes / (1024 * 1024));
     }
 }
