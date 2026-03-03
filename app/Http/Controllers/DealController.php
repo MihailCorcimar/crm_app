@@ -2,13 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\DealQuickActivityRequest;
 use App\Http\Requests\DealRequest;
 use App\Http\Requests\DealStageRequest;
+use App\Models\CalendarEvent;
 use App\Models\Deal;
 use App\Models\Entity;
 use App\Models\User;
 use App\Support\DealStageService;
 use App\Support\TenantContext;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -138,6 +141,14 @@ class DealController extends Controller
                 'created_at' => $deal->created_at?->format('d/m/Y H:i'),
                 'updated_at' => $deal->updated_at?->format('d/m/Y H:i'),
             ],
+            'timeline' => $this->timeline($deal),
+            'quickActivityTypes' => $this->quickActivityTypes(),
+            'quickActivityDefaults' => [
+                'activity_type' => 'call',
+                'activity_at' => now()->format('Y-m-d\TH:i'),
+                'owner_id' => auth()->id(),
+            ],
+            'owners' => $this->owners(),
         ]);
     }
 
@@ -174,6 +185,40 @@ class DealController extends Controller
         ]);
 
         return back();
+    }
+
+    public function storeQuickActivity(DealQuickActivityRequest $request, Deal $deal): RedirectResponse
+    {
+        $validated = $request->validated();
+        $activityType = (string) $validated['activity_type'];
+        $startAt = CarbonImmutable::parse((string) $validated['activity_at']);
+        $duration = $this->quickActivityDuration($activityType);
+        $endAt = $startAt->addMinutes($duration);
+        $title = trim((string) ($validated['title'] ?? ''));
+
+        CalendarEvent::query()->create([
+            'title' => $title !== '' ? $title : $this->quickActivityDefaultTitle($activityType, $deal),
+            'description' => $validated['description'] ?? null,
+            'start_at' => $startAt,
+            'end_at' => $endAt,
+            'location' => null,
+            'owner_id' => (int) $validated['owner_id'],
+            'eventable_type' => Deal::class,
+            'eventable_id' => $deal->id,
+            'calendar_type_id' => null,
+            'calendar_action_id' => null,
+            'status' => 'active',
+            // Keep legacy columns synchronized while they exist.
+            'event_date' => $startAt->format('Y-m-d'),
+            'event_time' => $startAt->format('H:i:s'),
+            'duration_minutes' => $duration,
+            'user_id' => (int) $validated['owner_id'],
+            'entity_id' => $deal->entity_id,
+            'share' => null,
+            'knowledge' => $activityType,
+        ]);
+
+        return to_route('deals.show', $deal);
     }
 
     public function destroy(Deal $deal): RedirectResponse
@@ -282,5 +327,115 @@ class DealController extends Controller
             'expected_close_date' => $deal->expected_close_date?->format('Y-m-d'),
             'owner' => $deal->owner?->name,
         ];
+    }
+
+    /**
+     * @return array<int, array{key: string, entry_type: string, activity_type: string|null, title: string, details: string, owner: string|null, occurred_at: string}>
+     */
+    private function timeline(Deal $deal): array
+    {
+        $items = [
+            [
+                'key' => sprintf('deal-created-%d', $deal->id),
+                'entry_type' => 'negocio',
+                'activity_type' => null,
+                'title' => 'Negócio criado',
+                'details' => sprintf('Registo criado com etapa "%s".', $this->stageLabel($deal->stage)),
+                'owner' => $deal->owner?->name,
+                'occurred_at' => $deal->created_at?->format('d/m/Y H:i') ?? '-',
+                'sort_at' => $deal->created_at?->getTimestamp() ?? 0,
+            ],
+        ];
+
+        if ($deal->updated_at !== null && $deal->updated_at->ne($deal->created_at)) {
+            $items[] = [
+                'key' => sprintf('deal-updated-%d', $deal->id),
+                'entry_type' => 'negocio',
+                'activity_type' => null,
+                'title' => 'Negócio atualizado',
+                'details' => 'Foram registadas alterações no negócio.',
+                'owner' => $deal->owner?->name,
+                'occurred_at' => $deal->updated_at->format('d/m/Y H:i'),
+                'sort_at' => $deal->updated_at->getTimestamp(),
+            ];
+        }
+
+        $activityItems = CalendarEvent::query()
+            ->where('eventable_type', Deal::class)
+            ->where('eventable_id', $deal->id)
+            ->with('owner:id,name')
+            ->orderByDesc('start_at')
+            ->limit(100)
+            ->get()
+            ->map(function (CalendarEvent $event): array {
+                $activityType = is_string($event->knowledge) ? $event->knowledge : null;
+                $timestamp = $event->start_at ?? $event->created_at;
+
+                return [
+                    'key' => sprintf('event-%d', $event->id),
+                    'entry_type' => 'atividade',
+                    'activity_type' => $activityType,
+                    'title' => trim((string) ($event->title ?? '')) !== '' ? (string) $event->title : 'Atividade',
+                    'details' => trim((string) ($event->description ?? '')) !== '' ? (string) $event->description : 'Sem descrição.',
+                    'owner' => $event->owner?->name,
+                    'occurred_at' => $timestamp?->format('d/m/Y H:i') ?? '-',
+                    'sort_at' => $timestamp?->getTimestamp() ?? 0,
+                ];
+            })
+            ->all();
+
+        $timeline = collect(array_merge($items, $activityItems))
+            ->sortByDesc('sort_at')
+            ->values()
+            ->map(function (array $item): array {
+                unset($item['sort_at']);
+
+                return $item;
+            })
+            ->all();
+
+        return $timeline;
+    }
+
+    /**
+     * @return array<int, array{value: string, label: string}>
+     */
+    private function quickActivityTypes(): array
+    {
+        return [
+            ['value' => 'call', 'label' => 'Chamada'],
+            ['value' => 'task', 'label' => 'Tarefa'],
+            ['value' => 'meeting', 'label' => 'Reunião'],
+            ['value' => 'note', 'label' => 'Nota'],
+        ];
+    }
+
+    private function quickActivityDuration(string $activityType): int
+    {
+        return match ($activityType) {
+            'task' => 30,
+            'meeting' => 60,
+            'note' => 5,
+            default => 20,
+        };
+    }
+
+    private function quickActivityDefaultTitle(string $activityType, Deal $deal): string
+    {
+        $label = match ($activityType) {
+            'call' => 'Chamada',
+            'task' => 'Tarefa',
+            'meeting' => 'Reunião',
+            'note' => 'Nota',
+            default => 'Atividade',
+        };
+
+        return sprintf('%s - %s', $label, $deal->title);
+    }
+
+    private function stageLabel(string $stage): string
+    {
+        return collect($this->stageOptions())
+            ->firstWhere('value', $stage)['label'] ?? $stage;
     }
 }

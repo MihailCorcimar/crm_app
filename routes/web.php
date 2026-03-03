@@ -61,6 +61,7 @@ Route::middleware(['auth'])->group(function (): void {
             ->parameters(['calendar' => 'calendar']);
 
         Route::patch('deals/{deal}/stage', [DealController::class, 'updateStage'])->name('deals.stage.update');
+        Route::post('deals/{deal}/quick-activity', [DealController::class, 'storeQuickActivity'])->name('deals.quick-activity.store');
         Route::resource('deals', DealController::class);
         Route::resource('people', ContactController::class)
             ->parameters(['people' => 'contact'])
