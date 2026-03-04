@@ -64,6 +64,7 @@ Route::middleware(['auth'])->group(function (): void {
         Route::post('deals/{deal}/quick-activity', [DealController::class, 'storeQuickActivity'])->name('deals.quick-activity.store');
         Route::post('deals/{deal}/proposal', [DealController::class, 'storeProposal'])->name('deals.proposal.store');
         Route::get('deals/{deal}/proposal/download', [DealController::class, 'downloadProposal'])->name('deals.proposal.download');
+        Route::post('deals/{deal}/proposal/email', [DealController::class, 'sendProposalEmail'])->name('deals.proposal.email.send');
         Route::resource('deals', DealController::class);
         Route::resource('people', ContactController::class)
             ->parameters(['people' => 'contact'])

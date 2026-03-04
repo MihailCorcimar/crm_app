@@ -5,17 +5,21 @@ namespace App\Http\Controllers;
 use App\Http\Requests\DealProposalUploadRequest;
 use App\Http\Requests\DealQuickActivityRequest;
 use App\Http\Requests\DealRequest;
+use App\Http\Requests\DealSendProposalEmailRequest;
 use App\Http\Requests\DealStageRequest;
 use App\Models\CalendarEvent;
 use App\Models\Deal;
+use App\Models\DealEmailLog;
 use App\Models\Entity;
 use App\Models\User;
+use App\Mail\DealProposalMail;
 use App\Support\DealStageService;
 use App\Support\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -152,6 +156,7 @@ class DealController extends Controller
                 'activity_at' => now()->format('Y-m-d\TH:i'),
                 'owner_id' => auth()->id(),
             ],
+            'proposalEmailDefaults' => $this->proposalEmailDefaults($deal),
             'owners' => $this->owners(),
         ]);
     }
@@ -194,6 +199,58 @@ class DealController extends Controller
             $deal->proposal_path,
             $deal->proposal_original_name ?: basename($deal->proposal_path)
         );
+    }
+
+    public function sendProposalEmail(DealSendProposalEmailRequest $request, Deal $deal): RedirectResponse
+    {
+        $this->authorize('update', $deal);
+
+        if (! is_string($deal->proposal_path) || $deal->proposal_path === '') {
+            return back()->withErrors([
+                'proposal_file' => 'Carrega primeiro uma proposta antes de enviar por email.',
+            ]);
+        }
+
+        if (! Storage::disk('local')->exists($deal->proposal_path)) {
+            return back()->withErrors([
+                'proposal_file' => 'O ficheiro da proposta nao foi encontrado. Volta a carregar a proposta.',
+            ]);
+        }
+
+        $validated = $request->validated();
+        $subject = trim((string) $validated['subject']);
+        $body = trim((string) $validated['body']);
+
+        try {
+            Mail::to((string) $validated['to_email'])->send(
+                new DealProposalMail(
+                    subjectLine: $subject,
+                    bodyText: $body,
+                    proposalPath: $deal->proposal_path,
+                    proposalName: $deal->proposal_original_name ?: basename($deal->proposal_path),
+                    proposalMimeType: $deal->proposal_mime_type,
+                )
+            );
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return back()->withErrors([
+                'proposal_email' => 'Nao foi possivel enviar o email da proposta. Verifica a configuracao de email.',
+            ]);
+        }
+
+        DealEmailLog::query()->create([
+            'deal_id' => $deal->id,
+            'email_type' => 'proposal',
+            'to_email' => (string) $validated['to_email'],
+            'subject' => $subject,
+            'body' => $body,
+            'attachment_name' => $deal->proposal_original_name ?: basename($deal->proposal_path),
+            'sent_by' => auth()->id(),
+            'sent_at' => now(),
+        ]);
+
+        return back()->with('success', 'Proposta enviada por email com sucesso.');
     }
 
     public function edit(Deal $deal): Response
@@ -428,7 +485,31 @@ class DealController extends Controller
             })
             ->all();
 
-        $timeline = collect(array_merge($items, $activityItems))
+        $emailItems = DealEmailLog::query()
+            ->where('deal_id', $deal->id)
+            ->with('sender:id,name')
+            ->orderByDesc('sent_at')
+            ->limit(100)
+            ->get()
+            ->map(function (DealEmailLog $emailLog): array {
+                return [
+                    'key' => sprintf('deal-email-%d', $emailLog->id),
+                    'entry_type' => 'email',
+                    'activity_type' => 'proposal',
+                    'title' => 'Proposta enviada por email',
+                    'details' => sprintf(
+                        'Para: %s | Assunto: %s',
+                        $emailLog->to_email,
+                        $emailLog->subject
+                    ),
+                    'owner' => $emailLog->sender?->name,
+                    'occurred_at' => $emailLog->sent_at?->format('d/m/Y H:i') ?? '-',
+                    'sort_at' => $emailLog->sent_at?->getTimestamp() ?? 0,
+                ];
+            })
+            ->all();
+
+        $timeline = collect(array_merge($items, $activityItems, $emailItems))
             ->sortByDesc('sort_at')
             ->values()
             ->map(function (array $item): array {
@@ -512,5 +593,37 @@ class DealController extends Controller
         }
 
         return sprintf('%.2f MB', $bytes / (1024 * 1024));
+    }
+
+    /**
+     * @return array{to_email: string, subject: string, body: string}
+     */
+    private function proposalEmailDefaults(Deal $deal): array
+    {
+        return [
+            'to_email' => $deal->entity?->email ?? '',
+            'subject' => $this->defaultProposalEmailSubject($deal),
+            'body' => $this->defaultProposalEmailBody($deal),
+        ];
+    }
+
+    private function defaultProposalEmailSubject(Deal $deal): string
+    {
+        return sprintf('Proposta comercial - %s', $deal->title);
+    }
+
+    private function defaultProposalEmailBody(Deal $deal): string
+    {
+        $entityName = $deal->entity?->name ?? 'cliente';
+
+        return implode("\n", [
+            sprintf('Ola %s,', $entityName),
+            '',
+            'Segue em anexo a proposta comercial para analise.',
+            'Se precisares de algum ajuste ou tiveres duvidas, estou disponivel.',
+            '',
+            'Cumprimentos,',
+            (string) (auth()->user()?->name ?? 'Equipa Comercial'),
+        ]);
     }
 }

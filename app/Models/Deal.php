@@ -6,6 +6,7 @@ use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Deal extends Model
@@ -76,6 +77,14 @@ class Deal extends Model
     public function proposalUploader(): BelongsTo
     {
         return $this->belongsTo(User::class, 'proposal_uploaded_by');
+    }
+
+    /**
+     * @return HasMany<DealEmailLog, $this>
+     */
+    public function emailLogs(): HasMany
+    {
+        return $this->hasMany(DealEmailLog::class);
     }
 
     /**

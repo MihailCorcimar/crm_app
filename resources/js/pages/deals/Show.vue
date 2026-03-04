@@ -58,6 +58,11 @@ const props = defineProps<{
         activity_at: string;
         owner_id: number | null;
     };
+    proposalEmailDefaults: {
+        to_email: string;
+        subject: string;
+        body: string;
+    };
     owners: OwnerOption[];
 }>();
 
@@ -80,7 +85,14 @@ const proposalForm = useForm<{
     proposal_file: null,
 });
 
+const emailProposalForm = useForm({
+    to_email: props.proposalEmailDefaults.to_email,
+    subject: props.proposalEmailDefaults.subject,
+    body: props.proposalEmailDefaults.body,
+});
+
 const proposalInput = ref<HTMLInputElement | null>(null);
+const emailConfirmation = ref<string>('');
 
 function stageLabel(stage: string): string {
     const map: Record<string, string> = {
@@ -101,6 +113,7 @@ function activityLabel(type: string | null): string {
         task: 'Tarefa',
         meeting: 'Reunião',
         note: 'Nota',
+        proposal: 'Proposta',
     };
 
     if (type === null) {
@@ -149,6 +162,17 @@ function submitProposal(): void {
             if (proposalInput.value !== null) {
                 proposalInput.value.value = '';
             }
+        },
+    });
+}
+
+function sendProposalByEmail(): void {
+    emailConfirmation.value = '';
+
+    emailProposalForm.post(`/deals/${props.deal.id}/proposal/email`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            emailConfirmation.value = 'Proposta enviada por email com sucesso.';
         },
     });
 }
@@ -236,6 +260,51 @@ function submitProposal(): void {
                             </Button>
                         </div>
                     </form>
+
+                    <div class="border-t pt-4">
+                        <h3 class="text-base font-semibold">Enviar proposta ao cliente</h3>
+                        <p class="mt-1 text-sm text-muted-foreground">O texto de email é editável antes do envio.</p>
+
+                        <form class="mt-3 grid gap-3" @submit.prevent="sendProposalByEmail">
+                            <div class="grid gap-2">
+                                <label class="text-sm font-medium">Email do cliente</label>
+                                <Input v-model="emailProposalForm.to_email" type="email" placeholder="cliente@empresa.pt" />
+                                <p v-if="emailProposalForm.errors.to_email" class="text-destructive text-sm">{{ emailProposalForm.errors.to_email }}</p>
+                            </div>
+
+                            <div class="grid gap-2">
+                                <label class="text-sm font-medium">Assunto</label>
+                                <Input v-model="emailProposalForm.subject" type="text" />
+                                <p v-if="emailProposalForm.errors.subject" class="text-destructive text-sm">{{ emailProposalForm.errors.subject }}</p>
+                            </div>
+
+                            <div class="grid gap-2">
+                                <label class="text-sm font-medium">Mensagem</label>
+                                <textarea
+                                    v-model="emailProposalForm.body"
+                                    class="border-input bg-background ring-offset-background min-h-28 w-full rounded-md border px-3 py-2 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none"
+                                />
+                                <p v-if="emailProposalForm.errors.body" class="text-destructive text-sm">{{ emailProposalForm.errors.body }}</p>
+                            </div>
+
+                            <p v-if="emailProposalForm.errors.proposal_file" class="text-destructive text-sm">
+                                {{ emailProposalForm.errors.proposal_file }}
+                            </p>
+                            <p v-if="emailProposalForm.errors.proposal_email" class="text-destructive text-sm">
+                                {{ emailProposalForm.errors.proposal_email }}
+                            </p>
+
+                            <p v-if="emailConfirmation" class="text-sm text-emerald-600">
+                                {{ emailConfirmation }}
+                            </p>
+
+                            <div>
+                                <Button type="submit" :disabled="emailProposalForm.processing || !deal.proposal.has_file">
+                                    Enviar proposta ao cliente
+                                </Button>
+                            </div>
+                        </form>
+                    </div>
                 </CardContent>
             </Card>
 
