@@ -65,6 +65,9 @@ Route::middleware(['auth'])->group(function (): void {
         Route::post('deals/{deal}/proposal', [DealController::class, 'storeProposal'])->name('deals.proposal.store');
         Route::get('deals/{deal}/proposal/download', [DealController::class, 'downloadProposal'])->name('deals.proposal.download');
         Route::post('deals/{deal}/proposal/email', [DealController::class, 'sendProposalEmail'])->name('deals.proposal.email.send');
+        Route::post('deals/{deal}/follow-up/cancel', [DealController::class, 'cancelFollowUp'])->name('deals.follow-up.cancel');
+        Route::post('deals/{deal}/follow-up/resume', [DealController::class, 'resumeFollowUp'])->name('deals.follow-up.resume');
+        Route::post('deals/{deal}/follow-up/customer-replied', [DealController::class, 'markCustomerReplied'])->name('deals.follow-up.customer-replied');
         Route::resource('deals', DealController::class);
         Route::resource('people', ContactController::class)
             ->parameters(['people' => 'contact'])

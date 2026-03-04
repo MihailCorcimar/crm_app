@@ -63,6 +63,15 @@ const props = defineProps<{
         subject: string;
         body: string;
     };
+    followUp: {
+        active: boolean;
+        next_send_at: string | null;
+        last_sent_at: string | null;
+        started_at: string | null;
+        stop_reason: string | null;
+        stop_reason_label: string | null;
+        customer_replied_at: string | null;
+    };
     owners: OwnerOption[];
 }>();
 
@@ -93,6 +102,8 @@ const emailProposalForm = useForm({
 
 const proposalInput = ref<HTMLInputElement | null>(null);
 const emailConfirmation = ref<string>('');
+const followUpFeedback = ref<string>('');
+const followUpError = ref<string>('');
 
 function stageLabel(stage: string): string {
     const map: Record<string, string> = {
@@ -114,6 +125,7 @@ function activityLabel(type: string | null): string {
         meeting: 'Reunião',
         note: 'Nota',
         proposal: 'Proposta',
+        follow_up: 'Follow Up',
     };
 
     if (type === null) {
@@ -173,6 +185,51 @@ function sendProposalByEmail(): void {
         preserveScroll: true,
         onSuccess: () => {
             emailConfirmation.value = 'Proposta enviada por email com sucesso.';
+        },
+    });
+}
+
+function cancelFollowUp(): void {
+    followUpFeedback.value = '';
+    followUpError.value = '';
+
+    router.post(`/deals/${props.deal.id}/follow-up/cancel`, {}, {
+        preserveScroll: true,
+        onSuccess: () => {
+            followUpFeedback.value = 'Follow up cancelado.';
+        },
+        onError: (errors) => {
+            followUpError.value = (errors.follow_up as string | undefined) ?? 'Não foi possível cancelar o follow up.';
+        },
+    });
+}
+
+function resumeFollowUp(): void {
+    followUpFeedback.value = '';
+    followUpError.value = '';
+
+    router.post(`/deals/${props.deal.id}/follow-up/resume`, {}, {
+        preserveScroll: true,
+        onSuccess: () => {
+            followUpFeedback.value = 'Follow up retomado.';
+        },
+        onError: (errors) => {
+            followUpError.value = (errors.follow_up as string | undefined) ?? 'Não foi possível retomar o follow up.';
+        },
+    });
+}
+
+function markCustomerReplied(): void {
+    followUpFeedback.value = '';
+    followUpError.value = '';
+
+    router.post(`/deals/${props.deal.id}/follow-up/customer-replied`, {}, {
+        preserveScroll: true,
+        onSuccess: () => {
+            followUpFeedback.value = 'Follow up parado: cliente respondeu.';
+        },
+        onError: () => {
+            followUpError.value = 'Não foi possível registar a resposta do cliente.';
         },
     });
 }
@@ -366,6 +423,59 @@ function sendProposalByEmail(): void {
                             <Button type="submit" :disabled="quickForm.processing">Registar atividade</Button>
                         </div>
                     </form>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Follow Up automático</CardTitle>
+                </CardHeader>
+                <CardContent class="space-y-3">
+                    <p class="text-sm">
+                        <span class="font-medium">Estado:</span>
+                        <span v-if="followUp.active" class="text-emerald-600"> Ativo </span>
+                        <span v-else class="text-muted-foreground"> Inativo </span>
+                    </p>
+                    <p class="text-sm">
+                        <span class="font-medium">Próximo envio:</span> {{ followUp.next_send_at || '-' }}
+                    </p>
+                    <p class="text-sm">
+                        <span class="font-medium">Último envio:</span> {{ followUp.last_sent_at || '-' }}
+                    </p>
+                    <p v-if="followUp.stop_reason_label" class="text-sm text-muted-foreground">
+                        <span class="font-medium">Paragem:</span> {{ followUp.stop_reason_label }}
+                    </p>
+                    <p class="text-xs text-muted-foreground">
+                        O envio automático ocorre de 2 em 2 dias com rotação de templates, apenas em horário de trabalho.
+                    </p>
+
+                    <p v-if="followUpFeedback" class="text-sm text-emerald-600">{{ followUpFeedback }}</p>
+                    <p v-if="followUpError" class="text-destructive text-sm">{{ followUpError }}</p>
+
+                    <div class="flex flex-wrap gap-2">
+                        <Button
+                            v-if="followUp.active"
+                            variant="outline"
+                            type="button"
+                            @click="cancelFollowUp"
+                        >
+                            Cancelar follow up
+                        </Button>
+                        <Button
+                            v-if="followUp.active"
+                            type="button"
+                            @click="markCustomerReplied"
+                        >
+                            Cliente respondeu
+                        </Button>
+                        <Button
+                            v-if="!followUp.active && deal.stage === 'follow_up'"
+                            type="button"
+                            @click="resumeFollowUp"
+                        >
+                            Retomar follow up
+                        </Button>
+                    </div>
                 </CardContent>
             </Card>
 

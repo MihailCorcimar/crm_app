@@ -13,6 +13,7 @@ use App\Models\DealEmailLog;
 use App\Models\Entity;
 use App\Models\User;
 use App\Mail\DealProposalMail;
+use App\Support\DealFollowUpService;
 use App\Support\DealStageService;
 use App\Support\TenantContext;
 use Carbon\CarbonImmutable;
@@ -28,7 +29,10 @@ use Inertia\Response;
 
 class DealController extends Controller
 {
-    public function __construct(private readonly DealStageService $dealStageService)
+    public function __construct(
+        private readonly DealStageService $dealStageService,
+        private readonly DealFollowUpService $dealFollowUpService,
+    )
     {
         $this->authorizeResource(Deal::class, 'deal');
     }
@@ -126,7 +130,8 @@ class DealController extends Controller
 
     public function store(DealRequest $request): RedirectResponse
     {
-        Deal::query()->create($this->payload($request->validated()));
+        $deal = Deal::query()->create($this->payload($request->validated()));
+        $this->syncFollowUpOnStageTransition($deal, null, $deal->stage);
 
         return to_route('deals.index');
     }
@@ -157,6 +162,7 @@ class DealController extends Controller
                 'owner_id' => auth()->id(),
             ],
             'proposalEmailDefaults' => $this->proposalEmailDefaults($deal),
+            'followUp' => $this->followUpPayload($deal),
             'owners' => $this->owners(),
         ]);
     }
@@ -274,18 +280,55 @@ class DealController extends Controller
 
     public function update(DealRequest $request, Deal $deal): RedirectResponse
     {
+        $fromStage = $deal->stage;
         $deal->update($this->payload($request->validated()));
+        $this->syncFollowUpOnStageTransition($deal->fresh(), $fromStage, $deal->stage);
 
         return to_route('deals.index');
     }
 
     public function updateStage(DealStageRequest $request, Deal $deal): RedirectResponse
     {
+        $fromStage = $deal->stage;
+        $toStage = $request->string('stage')->toString();
+
         $deal->update([
-            'stage' => $request->string('stage')->toString(),
+            'stage' => $toStage,
         ]);
+        $this->syncFollowUpOnStageTransition($deal->fresh(), $fromStage, $toStage);
 
         return back();
+    }
+
+    public function cancelFollowUp(Deal $deal): RedirectResponse
+    {
+        $this->authorize('update', $deal);
+        $this->dealFollowUpService->stop($deal, DealFollowUpService::STOP_MANUAL);
+
+        return back()->with('success', 'Follow up cancelado.');
+    }
+
+    public function resumeFollowUp(Deal $deal): RedirectResponse
+    {
+        $this->authorize('update', $deal);
+
+        if ($deal->stage !== Deal::STAGE_FOLLOW_UP) {
+            return back()->withErrors([
+                'follow_up' => 'Para retomar, o negócio tem de estar na etapa Follow Up.',
+            ]);
+        }
+
+        $this->dealFollowUpService->start($deal);
+
+        return back()->with('success', 'Follow up retomado.');
+    }
+
+    public function markCustomerReplied(Deal $deal): RedirectResponse
+    {
+        $this->authorize('update', $deal);
+        $this->dealFollowUpService->markCustomerReplied($deal);
+
+        return back()->with('success', 'Follow up parado: cliente respondeu.');
     }
 
     public function storeQuickActivity(DealQuickActivityRequest $request, Deal $deal): RedirectResponse
@@ -492,11 +535,13 @@ class DealController extends Controller
             ->limit(100)
             ->get()
             ->map(function (DealEmailLog $emailLog): array {
+                $isFollowUp = $emailLog->email_type === 'follow_up';
+
                 return [
                     'key' => sprintf('deal-email-%d', $emailLog->id),
                     'entry_type' => 'email',
-                    'activity_type' => 'proposal',
-                    'title' => 'Proposta enviada por email',
+                    'activity_type' => $isFollowUp ? 'follow_up' : 'proposal',
+                    'title' => $isFollowUp ? 'Follow up enviado por email' : 'Proposta enviada por email',
                     'details' => sprintf(
                         'Para: %s | Assunto: %s',
                         $emailLog->to_email,
@@ -562,6 +607,50 @@ class DealController extends Controller
     {
         return collect($this->stageOptions())
             ->firstWhere('value', $stage)['label'] ?? $stage;
+    }
+
+    private function syncFollowUpOnStageTransition(Deal $deal, ?string $fromStage, string $toStage): void
+    {
+        if ($toStage === Deal::STAGE_FOLLOW_UP && $fromStage !== Deal::STAGE_FOLLOW_UP) {
+            $this->dealFollowUpService->start($deal);
+
+            return;
+        }
+
+        if ($fromStage === Deal::STAGE_FOLLOW_UP && $toStage !== Deal::STAGE_FOLLOW_UP && $deal->follow_up_active) {
+            $this->dealFollowUpService->stop($deal, DealFollowUpService::STOP_STAGE_CHANGED);
+        }
+    }
+
+    /**
+     * @return array{active: bool, next_send_at: string|null, last_sent_at: string|null, started_at: string|null, stop_reason: string|null, stop_reason_label: string|null, customer_replied_at: string|null}
+     */
+    private function followUpPayload(Deal $deal): array
+    {
+        return [
+            'active' => (bool) $deal->follow_up_active,
+            'next_send_at' => $deal->follow_up_next_send_at?->timezone('Europe/Lisbon')->format('d/m/Y H:i'),
+            'last_sent_at' => $deal->follow_up_last_sent_at?->timezone('Europe/Lisbon')->format('d/m/Y H:i'),
+            'started_at' => $deal->follow_up_started_at?->timezone('Europe/Lisbon')->format('d/m/Y H:i'),
+            'stop_reason' => $deal->follow_up_stop_reason,
+            'stop_reason_label' => $this->followUpStopReasonLabel($deal->follow_up_stop_reason),
+            'customer_replied_at' => $deal->follow_up_customer_replied_at?->timezone('Europe/Lisbon')->format('d/m/Y H:i'),
+        ];
+    }
+
+    private function followUpStopReasonLabel(?string $reason): ?string
+    {
+        if (! is_string($reason) || $reason === '') {
+            return null;
+        }
+
+        return match ($reason) {
+            DealFollowUpService::STOP_STAGE_CHANGED => 'Negócio saiu da etapa Follow Up',
+            DealFollowUpService::STOP_CUSTOMER_REPLIED => 'Cliente respondeu',
+            DealFollowUpService::STOP_MANUAL => 'Cancelado manualmente',
+            DealFollowUpService::STOP_MISSING_RECIPIENT => 'Sem email de destino',
+            default => $reason,
+        };
     }
 
     /**
