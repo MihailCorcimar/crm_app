@@ -111,6 +111,14 @@ class Deal extends Model
     }
 
     /**
+     * @return HasMany<DealProduct, $this>
+     */
+    public function products(): HasMany
+    {
+        return $this->hasMany(DealProduct::class);
+    }
+
+    /**
      * @return list<string>
      */
     public static function stages(): array

@@ -72,4 +72,12 @@ class Item extends Model
     {
         return $this->hasMany(SupplierOrderLine::class);
     }
+
+    /**
+     * @return HasMany<DealProduct, $this>
+     */
+    public function dealProducts(): HasMany
+    {
+        return $this->hasMany(DealProduct::class);
+    }
 }

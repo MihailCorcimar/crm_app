@@ -5,7 +5,9 @@ use App\Http\Controllers\Access\UserManagementController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\DealController;
+use App\Http\Controllers\DealProductStatsController;
 use App\Http\Controllers\EntityController;
+use App\Http\Controllers\ItemController;
 use App\Http\Controllers\LogController;
 use App\Http\Controllers\TenantBillingController;
 use App\Http\Controllers\TenantController;
@@ -68,10 +70,17 @@ Route::middleware(['auth'])->group(function (): void {
         Route::post('deals/{deal}/follow-up/cancel', [DealController::class, 'cancelFollowUp'])->name('deals.follow-up.cancel');
         Route::post('deals/{deal}/follow-up/resume', [DealController::class, 'resumeFollowUp'])->name('deals.follow-up.resume');
         Route::post('deals/{deal}/follow-up/customer-replied', [DealController::class, 'markCustomerReplied'])->name('deals.follow-up.customer-replied');
+        Route::get('deals/product-stats', [DealProductStatsController::class, 'index'])->name('deals.product-stats.index');
+        Route::get('deals/product-stats/export', [DealProductStatsController::class, 'exportCsv'])->name('deals.product-stats.export');
+        Route::get('deals/product-stats/{item}', [DealProductStatsController::class, 'show'])->name('deals.product-stats.show');
         Route::resource('deals', DealController::class);
         Route::resource('people', ContactController::class)
             ->parameters(['people' => 'contact'])
             ->names('people');
+        Route::patch('items/{item}/deactivate', [ItemController::class, 'deactivate'])->name('items.deactivate');
+        Route::patch('items/{item}/activate', [ItemController::class, 'activate'])->name('items.activate');
+        Route::resource('items', ItemController::class)
+            ->except(['show', 'destroy']);
         Route::post('entities/vies', [EntityController::class, 'lookupVat'])->name('entities.vies');
         Route::resource('entities', EntityController::class);
     });

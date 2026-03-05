@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { BookOpenText, BriefcaseBusiness, Building2, Calendar, Settings, Shield, Users } from 'lucide-vue-next';
+import { BarChart3, BookOpenText, BriefcaseBusiness, Building2, Calendar, Package, Settings, Shield, Users } from 'lucide-vue-next';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
 import {
@@ -28,9 +28,19 @@ const mainNavItems: NavItem[] = [
         icon: Users,
     },
     {
+        title: 'Produtos',
+        href: '/items',
+        icon: Package,
+    },
+    {
         title: 'Negócios',
         href: '/deals',
         icon: BriefcaseBusiness,
+    },
+    {
+        title: 'Estatísticas de produtos',
+        href: '/deals/product-stats',
+        icon: BarChart3,
     },
     {
         title: 'Calendário',
@@ -130,3 +140,4 @@ const mainNavItems: NavItem[] = [
     </Sidebar>
     <slot />
 </template>
+
