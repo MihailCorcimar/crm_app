@@ -50,6 +50,7 @@ Route::middleware(['auth'])->group(function (): void {
     Route::delete('tenants/{tenant}/members/{user}', [TenantMemberController::class, 'destroy'])->name('tenants.members.destroy');
 
     Route::middleware('tenant.active')->group(function (): void {
+        Route::get('ai/chat', [AiChatController::class, 'index'])->name('ai.chat.index');
         Route::post('ai/chat', [AiChatController::class, 'store'])->name('ai.chat.store');
 
         Route::resource('access/users', UserManagementController::class)

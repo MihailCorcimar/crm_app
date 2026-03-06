@@ -1,6 +1,6 @@
 ﻿<script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { BarChart3, BookOpenText, BriefcaseBusiness, Building2, Calendar, Package, Settings, Shield, Users } from 'lucide-vue-next';
+import { BarChart3, BookOpenText, BriefcaseBusiness, Building2, Calendar, MessageSquare, Package, Settings, Shield, Users } from 'lucide-vue-next';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
 import {
@@ -52,6 +52,11 @@ const mainNavItems: NavItem[] = [
                 href: '/deals/product-stats',
             },
         ],
+    },
+    {
+        title: 'Chat IA',
+        href: '/ai/chat',
+        icon: MessageSquare,
     },
     {
         title: 'Administração',

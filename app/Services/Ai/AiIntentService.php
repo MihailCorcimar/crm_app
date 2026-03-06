@@ -2,8 +2,9 @@
 
 namespace App\Services\Ai;
 
-use App\Models\Deal;
-use Illuminate\Support\Str;
+use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Http;
+use RuntimeException;
 
 class AiIntentService
 {
@@ -12,120 +13,181 @@ class AiIntentService
      */
     public function resolve(string $message): array
     {
-        $normalized = Str::of($message)
-            ->lower()
-            ->ascii()
-            ->replaceMatches('/\s+/', ' ')
-            ->trim()
-            ->value();
-
-        $dealStage = $this->extractDealStage($normalized);
-        if (
-            (str_contains($normalized, 'negocio') || str_contains($normalized, 'pipeline'))
-            && (
-                str_contains($normalized, 'volume')
-                || str_contains($normalized, 'total')
-                || str_contains($normalized, 'valor')
-                || str_contains($normalized, 'quant')
-            )
-        ) {
-            return [
-                'intent' => 'deal_summary',
-                'confidence' => 0.92,
-                'parameters' => [
-                    'stage' => $dealStage,
-                    'name' => null,
-                    'field' => null,
-                ],
-            ];
+        $apiKey = (string) config('services.openai.api_key', '');
+        if ($apiKey === '') {
+            throw new RuntimeException('OpenAI API key is not configured.');
         }
 
-        $field = $this->extractContactField($normalized);
-        $name = $this->extractName($message, $normalized);
+        $model = (string) config('services.openai.model', 'gpt-5-nano');
+        $timeout = (int) config('services.openai.timeout', 20);
 
-        if ($field !== null && $name !== null) {
-            return [
-                'intent' => 'contact_lookup',
-                'confidence' => 0.9,
-                'parameters' => [
-                    'stage' => null,
-                    'name' => $name,
-                    'field' => $field,
+        $http = Http::baseUrl('https://api.openai.com/v1')
+            ->acceptJson()
+            ->asJson()
+            ->timeout($timeout)
+            ->withToken($apiKey);
+
+        $systemPrompt = $this->systemPrompt();
+
+        $responsesRequest = [
+            'model' => $model,
+            'input' => [
+                [
+                    'role' => 'system',
+                    'content' => $systemPrompt,
                 ],
-            ];
+                [
+                    'role' => 'user',
+                    'content' => $message,
+                ],
+            ],
+            'max_output_tokens' => 180,
+        ];
+
+        $responsesResult = $http->post('responses', $responsesRequest);
+        if ($responsesResult->successful()) {
+            $content = $this->extractResponsesText($responsesResult);
+
+            return $this->normalizeIntentPayload($content);
         }
+
+        // OpenAI-only fallback for compatibility across endpoints.
+        $chatCompletionsRequest = [
+            'model' => $model,
+            'messages' => [
+                ['role' => 'system', 'content' => $systemPrompt],
+                ['role' => 'user', 'content' => $message],
+            ],
+            'temperature' => 0,
+            'max_tokens' => 180,
+        ];
+
+        $chatResult = $http->post('chat/completions', $chatCompletionsRequest);
+        if (! $chatResult->successful()) {
+            $this->throwOpenAiError($chatResult);
+        }
+
+        $content = (string) data_get($chatResult->json(), 'choices.0.message.content', '');
+
+        return $this->normalizeIntentPayload($content);
+    }
+
+    private function systemPrompt(): string
+    {
+        return <<<'PROMPT'
+You are an intent resolver for a CRM assistant.
+Classify the user message into one intent and extract parameters.
+
+Allowed intents:
+- deal_summary
+- contact_lookup
+- unsupported
+
+Rules:
+- Return STRICT JSON only.
+- No markdown.
+- If unsure, use "unsupported".
+- Keep confidence between 0 and 1.
+
+Output JSON schema:
+{
+  "intent": "deal_summary|contact_lookup|unsupported",
+  "confidence": 0.0,
+  "parameters": {
+    "stage": "lead|proposal|negotiation|follow_up|won|lost|null",
+    "name": "string|null",
+    "field": "phone|mobile|email|null"
+  }
+}
+PROMPT;
+    }
+
+    private function extractResponsesText(Response $response): string
+    {
+        $payload = $response->json();
+
+        $output = data_get($payload, 'output', []);
+        if (! is_array($output)) {
+            return '';
+        }
+
+        foreach ($output as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $content = data_get($item, 'content', []);
+            if (! is_array($content)) {
+                continue;
+            }
+
+            foreach ($content as $contentItem) {
+                if (! is_array($contentItem)) {
+                    continue;
+                }
+
+                $text = data_get($contentItem, 'text');
+                if (is_string($text) && trim($text) !== '') {
+                    return $text;
+                }
+            }
+        }
+
+        $fallbackText = data_get($payload, 'output_text');
+
+        return is_string($fallbackText) ? $fallbackText : '';
+    }
+
+    /**
+     * @return array{intent: string, confidence: float, parameters: array<string, string|null>}
+     */
+    private function normalizeIntentPayload(string $raw): array
+    {
+        $decoded = json_decode($raw, true);
+
+        if (! is_array($decoded)) {
+            throw new RuntimeException('OpenAI did not return valid JSON for intent resolution.');
+        }
+
+        $intent = (string) ($decoded['intent'] ?? 'unsupported');
+        if (! in_array($intent, ['deal_summary', 'contact_lookup', 'unsupported'], true)) {
+            $intent = 'unsupported';
+        }
+
+        $confidence = (float) ($decoded['confidence'] ?? 0);
+        $confidence = max(0, min(1, $confidence));
+
+        $parameters = is_array($decoded['parameters'] ?? null) ? $decoded['parameters'] : [];
+
+        $stage = $parameters['stage'] ?? null;
+        if (! in_array($stage, ['lead', 'proposal', 'negotiation', 'follow_up', 'won', 'lost', null], true)) {
+            $stage = null;
+        }
+
+        $field = $parameters['field'] ?? null;
+        if (! in_array($field, ['phone', 'mobile', 'email', null], true)) {
+            $field = null;
+        }
+
+        $name = $parameters['name'] ?? null;
+        $name = is_string($name) && trim($name) !== '' ? trim($name) : null;
 
         return [
-            'intent' => 'unsupported',
-            'confidence' => 0.3,
+            'intent' => $intent,
+            'confidence' => $confidence,
             'parameters' => [
-                'stage' => null,
-                'name' => null,
-                'field' => null,
+                'stage' => $stage,
+                'name' => $name,
+                'field' => $field,
             ],
         ];
     }
 
-    private function extractDealStage(string $normalized): ?string
+    private function throwOpenAiError(Response $response): never
     {
-        if (str_contains($normalized, 'lead')) {
-            return Deal::STAGE_LEAD;
-        }
+        $status = $response->status();
+        $message = (string) data_get($response->json(), 'error.message', 'OpenAI request failed.');
 
-        if (str_contains($normalized, 'proposta')) {
-            return Deal::STAGE_PROPOSAL;
-        }
-
-        if (str_contains($normalized, 'negociacao') || str_contains($normalized, 'negociar')) {
-            return Deal::STAGE_NEGOTIATION;
-        }
-
-        if (str_contains($normalized, 'follow up') || str_contains($normalized, 'followup')) {
-            return Deal::STAGE_FOLLOW_UP;
-        }
-
-        if (str_contains($normalized, 'ganho') || str_contains($normalized, 'won')) {
-            return Deal::STAGE_WON;
-        }
-
-        if (str_contains($normalized, 'perdido') || str_contains($normalized, 'lost')) {
-            return Deal::STAGE_LOST;
-        }
-
-        return null;
-    }
-
-    private function extractContactField(string $normalized): ?string
-    {
-        if (str_contains($normalized, 'telemovel') || str_contains($normalized, 'mobile') || str_contains($normalized, 'celular')) {
-            return 'mobile';
-        }
-
-        if (str_contains($normalized, 'telefone') || str_contains($normalized, 'phone')) {
-            return 'phone';
-        }
-
-        if (str_contains($normalized, 'email') || str_contains($normalized, 'e-mail')) {
-            return 'email';
-        }
-
-        return null;
-    }
-
-    private function extractName(string $originalMessage, string $normalized): ?string
-    {
-        if (preg_match('/["\']([^"\']{2,})["\']/', $originalMessage, $matches) === 1) {
-            return trim($matches[1]);
-        }
-
-        if (preg_match('/(?:do|da|de)\s+(.+)$/', $normalized, $matches) === 1) {
-            $raw = trim((string) $matches[1], " \t\n\r\0\x0B?.!,;");
-
-            if ($raw !== '') {
-                return $raw;
-            }
-        }
-
-        return null;
+        throw new RuntimeException("OpenAI error ({$status}): {$message}");
     }
 }

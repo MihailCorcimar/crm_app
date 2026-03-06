@@ -9,6 +9,9 @@ use App\Services\Ai\AiIntentService;
 use App\Services\Ai\AiSecureQueryService;
 use App\Support\TenantContext;
 use Illuminate\Http\JsonResponse;
+use Inertia\Inertia;
+use Inertia\Response;
+use RuntimeException;
 
 class ChatController extends Controller
 {
@@ -16,6 +19,19 @@ class ChatController extends Controller
         private readonly AiIntentService $intentService,
         private readonly AiSecureQueryService $queryService,
     ) {
+    }
+
+    public function index(): Response
+    {
+        return Inertia::render('ai/Chat', [
+            'suggestedQuestions' => [
+                'Qual o volume de negócios em negociação?',
+                'Qual o volume de negócios em follow up?',
+                'Qual o telemóvel do António Pinheiro?',
+                'Qual o email do João Silva?',
+            ],
+            'tenantId' => TenantContext::id(),
+        ]);
     }
 
     public function store(ChatQueryRequest $request): JsonResponse
@@ -27,7 +43,23 @@ class ChatController extends Controller
         $user = $request->user();
         $message = (string) $request->validated('message');
 
-        $resolvedIntent = $this->intentService->resolve($message);
+        try {
+            $resolvedIntent = $this->intentService->resolve($message);
+        } catch (RuntimeException $exception) {
+            return response()->json([
+                'message' => $message,
+                'intent' => 'error',
+                'confidence' => 0,
+                'answer' => $exception->getMessage(),
+                'data' => [
+                    'type' => 'error',
+                ],
+                'meta' => [
+                    'tenant_id' => $tenantId,
+                ],
+            ], 503);
+        }
+
         $result = $this->queryService->execute($resolvedIntent, $user, $tenantId);
 
         return response()->json([

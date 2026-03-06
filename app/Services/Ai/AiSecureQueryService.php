@@ -56,6 +56,18 @@ class AiSecureQueryService
 
         $count = (clone $baseQuery)->count();
         $total = (float) (clone $baseQuery)->sum('value');
+        $topDeals = (clone $baseQuery)
+            ->orderByDesc('value')
+            ->limit(5)
+            ->get(['id', 'title', 'stage', 'value'])
+            ->map(fn (Deal $deal): array => [
+                'id' => $deal->id,
+                'title' => $deal->title,
+                'stage' => $deal->stage,
+                'stage_label' => $this->stageLabel($deal->stage),
+                'value' => round((float) $deal->value, 2),
+            ])
+            ->all();
 
         /** @var Collection<int, object{stage: string, count_rows: int|string, total_value: float|string}> $byStage */
         $byStage = Deal::query()
@@ -76,6 +88,7 @@ class AiSecureQueryService
                     'count' => 0,
                     'total' => 0,
                     'by_stage' => $this->dealStageRows($byStage),
+                    'top_deals' => [],
                 ],
             ];
         }
@@ -90,6 +103,7 @@ class AiSecureQueryService
                 'count' => $count,
                 'total' => round($total, 2),
                 'by_stage' => $this->dealStageRows($byStage),
+                'top_deals' => $topDeals,
             ],
         ];
     }
