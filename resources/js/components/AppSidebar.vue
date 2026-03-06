@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
 import { BarChart3, BookOpenText, BriefcaseBusiness, Building2, Calendar, Package, Settings, Shield, Users } from 'lucide-vue-next';
 import NavMain from '@/components/NavMain.vue';
@@ -28,19 +28,9 @@ const mainNavItems: NavItem[] = [
         icon: Users,
     },
     {
-        title: 'Produtos',
-        href: '/items',
-        icon: Package,
-    },
-    {
         title: 'Negócios',
         href: '/deals',
         icon: BriefcaseBusiness,
-    },
-    {
-        title: 'Estatísticas de produtos',
-        href: '/deals/product-stats',
-        icon: BarChart3,
     },
     {
         title: 'Calendário',
@@ -48,12 +38,23 @@ const mainNavItems: NavItem[] = [
         icon: Calendar,
     },
     {
-        title: 'Logs',
-        href: '/logs',
-        icon: BookOpenText,
+        title: 'Produtos',
+        href: '/items',
+        icon: Package,
     },
     {
-        title: 'Gestão de Acessos',
+        title: 'Relatórios',
+        href: '/deals/product-stats',
+        icon: BarChart3,
+        children: [
+            {
+                title: 'Estatísticas de Produtos',
+                href: '/deals/product-stats',
+            },
+        ],
+    },
+    {
+        title: 'Administração',
         href: '/access/users',
         icon: Shield,
         children: [
@@ -73,11 +74,11 @@ const mainNavItems: NavItem[] = [
         icon: Building2,
         children: [
             {
-                title: 'Gestão de tenants',
+                title: 'Gestão de Tenants',
                 href: '/tenants',
             },
             {
-                title: 'Planos e faturação',
+                title: 'Planos e Faturação',
                 href: '/tenants/billing',
             },
         ],
@@ -113,6 +114,11 @@ const mainNavItems: NavItem[] = [
             },
         ],
     },
+    {
+        title: 'Logs',
+        href: '/logs',
+        icon: BookOpenText,
+    },
 ];
 </script>
 
@@ -140,4 +146,3 @@ const mainNavItems: NavItem[] = [
     </Sidebar>
     <slot />
 </template>
-

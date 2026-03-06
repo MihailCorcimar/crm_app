@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 type DealShowPayload = {
     id: number;
@@ -37,6 +37,24 @@ type QuickActivityType = {
 type OwnerOption = {
     id: number;
     name: string;
+};
+
+type ProductOption = {
+    id: number;
+    name: string;
+    reference: string | null;
+    code: string | null;
+    default_price: number;
+};
+
+type DealProductLine = {
+    id: number;
+    item_id: number;
+    item_name: string;
+    item_reference: string | null;
+    quantity: number;
+    unit_price: number;
+    total_value: number;
 };
 
 type TimelineItem = {
@@ -73,6 +91,8 @@ const props = defineProps<{
         customer_replied_at: string | null;
     };
     owners: OwnerOption[];
+    productOptions: ProductOption[];
+    dealProducts: DealProductLine[];
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -86,6 +106,12 @@ const quickForm = useForm({
     owner_id: props.quickActivityDefaults.owner_id ?? '',
     title: '',
     description: '',
+});
+
+const productForm = useForm({
+    item_id: '' as number | '',
+    quantity: '1',
+    unit_price: '',
 });
 
 const proposalForm = useForm<{
@@ -105,6 +131,26 @@ const emailConfirmation = ref<string>('');
 const followUpFeedback = ref<string>('');
 const followUpError = ref<string>('');
 
+const totalProductsValue = computed(() =>
+    props.dealProducts.reduce((sum, line) => sum + line.total_value, 0),
+);
+
+watch(
+    () => productForm.item_id,
+    (value) => {
+        if (value === '') {
+            productForm.unit_price = '';
+
+            return;
+        }
+
+        const selected = props.productOptions.find((item) => item.id === Number(value));
+        if (selected !== undefined) {
+            productForm.unit_price = selected.default_price.toFixed(2);
+        }
+    },
+);
+
 function stageLabel(stage: string): string {
     const map: Record<string, string> = {
         lead: 'Lead',
@@ -116,6 +162,20 @@ function stageLabel(stage: string): string {
     };
 
     return map[stage] ?? stage;
+}
+
+function formatCurrency(value: number): string {
+    return new Intl.NumberFormat('pt-PT', {
+        style: 'currency',
+        currency: 'EUR',
+    }).format(value);
+}
+
+function formatQuantity(value: number): string {
+    return new Intl.NumberFormat('pt-PT', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+    }).format(value);
 }
 
 function activityLabel(type: string | null): string {
@@ -231,6 +291,27 @@ function markCustomerReplied(): void {
         onError: () => {
             followUpError.value = 'Não foi possível registar a resposta do cliente.';
         },
+    });
+}
+
+function addProductToDeal(): void {
+    productForm.post(`/deals/${props.deal.id}/products`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            productForm.reset();
+            productForm.quantity = '1';
+            productForm.item_id = '';
+        },
+    });
+}
+
+function removeProductFromDeal(lineId: number): void {
+    if (!window.confirm('Remover este produto do negócio?')) {
+        return;
+    }
+
+    router.delete(`/deals/${props.deal.id}/products/${lineId}`, {
+        preserveScroll: true,
     });
 }
 </script>
@@ -364,6 +445,91 @@ function markCustomerReplied(): void {
                     </div>
                 </CardContent>
             </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Produtos do negócio</CardTitle>
+                </CardHeader>
+                <CardContent class="space-y-4">
+                    <form class="grid gap-3 md:grid-cols-[1fr_140px_140px_auto]" @submit.prevent="addProductToDeal">
+                        <div class="grid gap-2">
+                            <label class="text-sm font-medium">Produto</label>
+                            <select
+                                v-model="productForm.item_id"
+                                class="border-input bg-background ring-offset-background flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none"
+                            >
+                                <option :value="''">Selecionar produto</option>
+                                <option v-for="item in productOptions" :key="item.id" :value="item.id">
+                                    {{ item.name }}<span v-if="item.reference"> ({{ item.reference }})</span>
+                                </option>
+                            </select>
+                            <p v-if="productForm.errors.item_id" class="text-destructive text-sm">{{ productForm.errors.item_id }}</p>
+                        </div>
+
+                        <div class="grid gap-2">
+                            <label class="text-sm font-medium">Quantidade</label>
+                            <Input v-model="productForm.quantity" type="number" min="0.01" step="0.01" />
+                            <p v-if="productForm.errors.quantity" class="text-destructive text-sm">{{ productForm.errors.quantity }}</p>
+                        </div>
+
+                        <div class="grid gap-2">
+                            <label class="text-sm font-medium">Preço unitário (EUR)</label>
+                            <Input v-model="productForm.unit_price" type="number" min="0" step="0.01" />
+                            <p v-if="productForm.errors.unit_price" class="text-destructive text-sm">{{ productForm.errors.unit_price }}</p>
+                        </div>
+
+                        <div class="flex items-end">
+                            <Button
+                                type="submit"
+                                :disabled="productForm.processing || productForm.item_id === '' || productForm.unit_price === ''"
+                            >
+                                Adicionar
+                            </Button>
+                        </div>
+                    </form>
+
+                    <div v-if="dealProducts.length === 0" class="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                        Ainda não existem produtos associados a este negócio.
+                    </div>
+
+                    <div v-else class="space-y-3">
+                        <div class="overflow-x-auto rounded-md border">
+                            <table class="min-w-full text-sm">
+                                <thead class="bg-muted/50">
+                                    <tr>
+                                        <th class="px-3 py-2 text-left font-medium">Produto</th>
+                                        <th class="px-3 py-2 text-right font-medium">Quantidade</th>
+                                        <th class="px-3 py-2 text-right font-medium">Preço unitário</th>
+                                        <th class="px-3 py-2 text-right font-medium">Total</th>
+                                        <th class="px-3 py-2 text-right font-medium">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="line in dealProducts" :key="line.id" class="border-t">
+                                        <td class="px-3 py-2">
+                                            <div class="font-medium">{{ line.item_name }}</div>
+                                            <div v-if="line.item_reference" class="text-xs text-muted-foreground">{{ line.item_reference }}</div>
+                                        </td>
+                                        <td class="px-3 py-2 text-right">{{ formatQuantity(line.quantity) }}</td>
+                                        <td class="px-3 py-2 text-right">{{ formatCurrency(line.unit_price) }}</td>
+                                        <td class="px-3 py-2 text-right">{{ formatCurrency(line.total_value) }}</td>
+                                        <td class="px-3 py-2 text-right">
+                                            <Button type="button" variant="outline" size="sm" @click="removeProductFromDeal(line.id)">
+                                                Remover
+                                            </Button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <p class="text-sm text-muted-foreground">
+                            Total de produtos no negócio: {{ formatCurrency(totalProductsValue) }}
+                        </p>
+                    </div>
+                </CardContent>
+            </Card>
+
 
             <Card>
                 <CardHeader>
@@ -509,3 +675,6 @@ function markCustomerReplied(): void {
         </div>
     </AppLayout>
 </template>
+
+
+

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Access\PermissionGroupController;
 use App\Http\Controllers\Access\UserManagementController;
+use App\Http\Controllers\Ai\ChatController as AiChatController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\DealController;
@@ -49,6 +50,8 @@ Route::middleware(['auth'])->group(function (): void {
     Route::delete('tenants/{tenant}/members/{user}', [TenantMemberController::class, 'destroy'])->name('tenants.members.destroy');
 
     Route::middleware('tenant.active')->group(function (): void {
+        Route::post('ai/chat', [AiChatController::class, 'store'])->name('ai.chat.store');
+
         Route::resource('access/users', UserManagementController::class)
             ->except(['show'])
             ->names('access.users');
@@ -64,6 +67,8 @@ Route::middleware(['auth'])->group(function (): void {
 
         Route::patch('deals/{deal}/stage', [DealController::class, 'updateStage'])->name('deals.stage.update');
         Route::post('deals/{deal}/quick-activity', [DealController::class, 'storeQuickActivity'])->name('deals.quick-activity.store');
+        Route::post('deals/{deal}/products', [DealController::class, 'storeProduct'])->name('deals.products.store');
+        Route::delete('deals/{deal}/products/{dealProduct}', [DealController::class, 'destroyProduct'])->name('deals.products.destroy');
         Route::post('deals/{deal}/proposal', [DealController::class, 'storeProposal'])->name('deals.proposal.store');
         Route::get('deals/{deal}/proposal/download', [DealController::class, 'downloadProposal'])->name('deals.proposal.download');
         Route::post('deals/{deal}/proposal/email', [DealController::class, 'sendProposalEmail'])->name('deals.proposal.email.send');

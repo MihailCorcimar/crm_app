@@ -3,14 +3,17 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\DealProposalUploadRequest;
+use App\Http\Requests\DealProductRequest;
 use App\Http\Requests\DealQuickActivityRequest;
 use App\Http\Requests\DealRequest;
 use App\Http\Requests\DealSendProposalEmailRequest;
 use App\Http\Requests\DealStageRequest;
 use App\Models\CalendarEvent;
 use App\Models\Deal;
+use App\Models\DealProduct;
 use App\Models\DealEmailLog;
 use App\Models\Entity;
+use App\Models\Item;
 use App\Models\User;
 use App\Mail\DealProposalMail;
 use App\Support\DealFollowUpService;
@@ -138,7 +141,12 @@ class DealController extends Controller
 
     public function show(Deal $deal): Response
     {
-        $deal->load(['entity:id,name', 'owner:id,name', 'proposalUploader:id,name']);
+        $deal->load([
+            'entity:id,name',
+            'owner:id,name',
+            'proposalUploader:id,name',
+            'products.item:id,name,description,reference,code',
+        ]);
 
         return Inertia::render('deals/Show', [
             'deal' => [
@@ -154,6 +162,8 @@ class DealController extends Controller
                 'updated_at' => $deal->updated_at?->format('d/m/Y H:i'),
                 'proposal' => $this->proposalPayload($deal),
             ],
+            'dealProducts' => $this->dealProductsPayload($deal),
+            'productOptions' => $this->productOptions(),
             'timeline' => $this->timeline($deal),
             'quickActivityTypes' => $this->quickActivityTypes(),
             'quickActivityDefaults' => [
@@ -365,6 +375,51 @@ class DealController extends Controller
         return to_route('deals.show', $deal);
     }
 
+    public function storeProduct(DealProductRequest $request, Deal $deal): RedirectResponse
+    {
+        $this->authorize('update', $deal);
+
+        $validated = $request->validated();
+        $itemId = (int) $validated['item_id'];
+        $quantityToAdd = round((float) $validated['quantity'], 2);
+        $unitPrice = round((float) $validated['unit_price'], 2);
+
+        $existingLine = $deal->products()
+            ->where('item_id', $itemId)
+            ->first();
+
+        if ($existingLine !== null) {
+            $newQuantity = round((float) $existingLine->quantity + $quantityToAdd, 2);
+            $existingLine->update([
+                'quantity' => $newQuantity,
+                'unit_price' => $unitPrice,
+                'total_value' => round($newQuantity * $unitPrice, 2),
+            ]);
+
+            return back()->with('success', 'Produto atualizado no negócio.');
+        }
+
+        $deal->products()->create([
+            'item_id' => $itemId,
+            'quantity' => $quantityToAdd,
+            'unit_price' => $unitPrice,
+            'total_value' => round($quantityToAdd * $unitPrice, 2),
+        ]);
+
+        return back()->with('success', 'Produto associado ao negócio.');
+    }
+
+    public function destroyProduct(Deal $deal, DealProduct $dealProduct): RedirectResponse
+    {
+        $this->authorize('update', $deal);
+
+        abort_unless($dealProduct->deal_id === $deal->id, 404);
+
+        $dealProduct->delete();
+
+        return back()->with('success', 'Produto removido do negócio.');
+    }
+
     public function destroy(Deal $deal): RedirectResponse
     {
         $deal->delete();
@@ -428,6 +483,37 @@ class DealController extends Controller
     }
 
     /**
+     * @return array<int, array{id: int, name: string, reference: string|null, code: string|null, default_price: float}>
+     */
+    private function productOptions(): array
+    {
+        return Item::query()
+            ->where('status', 'active')
+            ->orderBy('name')
+            ->orderBy('reference')
+            ->get(['id', 'name', 'description', 'reference', 'code', 'price'])
+            ->map(function (Item $item): array {
+                $name = trim((string) $item->name);
+                if ($name === '') {
+                    $name = trim((string) $item->description);
+                }
+
+                if ($name === '') {
+                    $name = sprintf('Produto #%d', $item->id);
+                }
+
+                return [
+                    'id' => $item->id,
+                    'name' => $name,
+                    'reference' => $item->reference,
+                    'code' => $item->code,
+                    'default_price' => (float) $item->price,
+                ];
+            })
+            ->all();
+    }
+
+    /**
      * @return array<int, array{value: string, label: string}>
      */
     private function stageOptions(): array
@@ -471,6 +557,37 @@ class DealController extends Controller
             'expected_close_date' => $deal->expected_close_date?->format('Y-m-d'),
             'owner' => $deal->owner?->name,
         ];
+    }
+
+    /**
+     * @return array<int, array{id: int, item_id: int, item_name: string, item_reference: string|null, quantity: float, unit_price: float, total_value: float}>
+     */
+    private function dealProductsPayload(Deal $deal): array
+    {
+        return $deal->products
+            ->map(function (DealProduct $line): array {
+                $itemName = trim((string) ($line->item?->name ?? ''));
+                if ($itemName === '') {
+                    $itemName = trim((string) ($line->item?->description ?? ''));
+                }
+
+                if ($itemName === '') {
+                    $itemName = sprintf('Produto #%d', (int) $line->item_id);
+                }
+
+                return [
+                    'id' => $line->id,
+                    'item_id' => (int) $line->item_id,
+                    'item_name' => $itemName,
+                    'item_reference' => $line->item?->reference,
+                    'quantity' => (float) $line->quantity,
+                    'unit_price' => (float) $line->unit_price,
+                    'total_value' => (float) $line->total_value,
+                ];
+            })
+            ->sortBy('item_name')
+            ->values()
+            ->all();
     }
 
     /**
