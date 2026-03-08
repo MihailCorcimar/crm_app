@@ -2,7 +2,9 @@
 
 namespace App\Services\Ai;
 
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
@@ -11,7 +13,7 @@ class AiIntentService
     /**
      * @return array{intent: string, confidence: float, parameters: array<string, string|null>}
      */
-    public function resolve(string $message): array
+    public function resolve(string $message, ?int $tenantId = null, ?int $userId = null): array
     {
         $apiKey = (string) config('services.openai.api_key', '');
         if ($apiKey === '') {
@@ -19,14 +21,71 @@ class AiIntentService
         }
 
         $model = (string) config('services.openai.model', 'gpt-5-nano');
-        $timeout = (int) config('services.openai.timeout', 20);
+        $timeout = max(1, (int) config('services.openai.timeout', 20));
+        $maxOutputTokens = max(32, (int) config('services.openai.max_output_tokens', 120));
+        $connectTimeout = max(1, (int) config('services.openai.connect_timeout', 10));
+        $retries = max(0, (int) config('services.openai.retries', 2));
+        $retryDelayMs = max(0, (int) config('services.openai.retry_delay_ms', 300));
+        $cacheSeconds = max(0, (int) config('services.openai.intent_cache_seconds', 120));
 
-        $http = Http::baseUrl('https://api.openai.com/v1')
-            ->acceptJson()
-            ->asJson()
-            ->timeout($timeout)
-            ->withToken($apiKey);
+        if ($cacheSeconds === 0) {
+            return $this->resolveFromOpenAi(
+                message: $message,
+                apiKey: $apiKey,
+                model: $model,
+                timeout: $timeout,
+                maxOutputTokens: $maxOutputTokens,
+                connectTimeout: $connectTimeout,
+                retries: $retries,
+                retryDelayMs: $retryDelayMs,
+            );
+        }
 
+        $cacheKey = sprintf(
+            'ai:intent:v1:%s:%s:%s:%s',
+            (string) ($tenantId ?? 'na'),
+            (string) ($userId ?? 'na'),
+            $model,
+            hash('sha256', mb_strtolower(trim($message))),
+        );
+
+        return Cache::remember($cacheKey, now()->addSeconds($cacheSeconds), function () use (
+            $message,
+            $apiKey,
+            $model,
+            $timeout,
+            $maxOutputTokens,
+            $connectTimeout,
+            $retries,
+            $retryDelayMs,
+        ): array {
+            return $this->resolveFromOpenAi(
+                message: $message,
+                apiKey: $apiKey,
+                model: $model,
+                timeout: $timeout,
+                maxOutputTokens: $maxOutputTokens,
+                connectTimeout: $connectTimeout,
+                retries: $retries,
+                retryDelayMs: $retryDelayMs,
+            );
+        });
+    }
+
+    /**
+     * @return array{intent: string, confidence: float, parameters: array<string, string|null>}
+     */
+    private function resolveFromOpenAi(
+        string $message,
+        string $apiKey,
+        string $model,
+        int $timeout,
+        int $maxOutputTokens,
+        int $connectTimeout,
+        int $retries,
+        int $retryDelayMs,
+    ): array {
+        $http = $this->openAiHttpClient($apiKey, $timeout, $connectTimeout, $retries, $retryDelayMs);
         $systemPrompt = $this->systemPrompt();
 
         $responsesRequest = [
@@ -41,7 +100,7 @@ class AiIntentService
                     'content' => $message,
                 ],
             ],
-            'max_output_tokens' => 180,
+            'max_output_tokens' => $maxOutputTokens,
         ];
 
         $responsesResult = $http->post('responses', $responsesRequest);
@@ -59,7 +118,7 @@ class AiIntentService
                 ['role' => 'user', 'content' => $message],
             ],
             'temperature' => 0,
-            'max_tokens' => 180,
+            'max_tokens' => $maxOutputTokens,
         ];
 
         $chatResult = $http->post('chat/completions', $chatCompletionsRequest);
@@ -70,6 +129,27 @@ class AiIntentService
         $content = (string) data_get($chatResult->json(), 'choices.0.message.content', '');
 
         return $this->normalizeIntentPayload($content);
+    }
+
+    private function openAiHttpClient(
+        string $apiKey,
+        int $timeout,
+        int $connectTimeout,
+        int $retries,
+        int $retryDelayMs,
+    ): PendingRequest {
+        $request = Http::baseUrl('https://api.openai.com/v1')
+            ->acceptJson()
+            ->asJson()
+            ->timeout($timeout)
+            ->connectTimeout($connectTimeout)
+            ->withToken($apiKey);
+
+        if ($retries === 0) {
+            return $request;
+        }
+
+        return $request->retry($retries, $retryDelayMs, null, false);
     }
 
     private function systemPrompt(): string
@@ -146,6 +226,10 @@ PROMPT;
         $decoded = json_decode($raw, true);
 
         if (! is_array($decoded)) {
+            $decoded = $this->decodeWrappedJson($raw);
+        }
+
+        if (! is_array($decoded)) {
             throw new RuntimeException('OpenAI did not return valid JSON for intent resolution.');
         }
 
@@ -181,6 +265,31 @@ PROMPT;
                 'field' => $field,
             ],
         ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function decodeWrappedJson(string $raw): ?array
+    {
+        $trimmed = trim($raw);
+
+        if (str_starts_with($trimmed, '```')) {
+            $trimmed = preg_replace('/^```[a-zA-Z0-9_-]*\s*/', '', $trimmed) ?? $trimmed;
+            $trimmed = preg_replace('/\s*```$/', '', $trimmed) ?? $trimmed;
+        }
+
+        $start = strpos($trimmed, '{');
+        $end = strrpos($trimmed, '}');
+
+        if ($start === false || $end === false || $end <= $start) {
+            return null;
+        }
+
+        $candidate = substr($trimmed, $start, $end - $start + 1);
+        $decoded = json_decode($candidate, true);
+
+        return is_array($decoded) ? $decoded : null;
     }
 
     private function throwOpenAiError(Response $response): never

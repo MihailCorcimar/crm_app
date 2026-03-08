@@ -45,13 +45,15 @@ Route::middleware(['auth'])->group(function (): void {
         Route::post('tenants/billing/resume', [TenantBillingController::class, 'resume'])->name('tenants.billing.resume');
     });
 
+    Route::get('tenants/{tenant}/edit', [TenantController::class, 'edit'])->name('tenants.edit');
+    Route::put('tenants/{tenant}', [TenantController::class, 'update'])->name('tenants.update');
     Route::get('tenants/{tenant}', [TenantController::class, 'show'])->name('tenants.show');
     Route::post('tenants/{tenant}/members', [TenantMemberController::class, 'store'])->name('tenants.members.store');
     Route::delete('tenants/{tenant}/members/{user}', [TenantMemberController::class, 'destroy'])->name('tenants.members.destroy');
 
     Route::middleware('tenant.active')->group(function (): void {
         Route::get('ai/chat', [AiChatController::class, 'index'])->name('ai.chat.index');
-        Route::post('ai/chat', [AiChatController::class, 'store'])->name('ai.chat.store');
+        Route::post('ai/chat', [AiChatController::class, 'store'])->middleware('throttle:ai-chat')->name('ai.chat.store');
 
         Route::resource('access/users', UserManagementController::class)
             ->except(['show'])

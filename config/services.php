@@ -39,6 +39,12 @@ return [
         'api_key' => env('OPENAI_API_KEY'),
         'model' => env('OPENAI_MODEL', 'gpt-5-nano'),
         'timeout' => (int) env('OPENAI_TIMEOUT', 20),
+        'max_output_tokens' => (int) env('OPENAI_MAX_OUTPUT_TOKENS', 120),
+        'connect_timeout' => (int) env('OPENAI_CONNECT_TIMEOUT', 10),
+        'retries' => (int) env('OPENAI_RETRIES', 2),
+        'retry_delay_ms' => (int) env('OPENAI_RETRY_DELAY_MS', 300),
+        'rate_limit_per_minute' => (int) env('OPENAI_RATE_LIMIT_PER_MINUTE', 30),
+        'intent_cache_seconds' => (int) env('OPENAI_INTENT_CACHE_SECONDS', 120),
     ],
 
 ];

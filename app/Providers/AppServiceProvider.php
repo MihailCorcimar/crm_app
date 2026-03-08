@@ -15,10 +15,14 @@ use App\Policies\DealPolicy;
 use App\Policies\EntityPolicy;
 use App\Policies\ItemPolicy;
 use App\Policies\TenantPolicy;
+use App\Support\TenantContext;
 use Carbon\CarbonImmutable;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 
@@ -38,6 +42,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+        $this->configureRateLimiters();
 
         Gate::policy(Tenant::class, TenantPolicy::class);
         Gate::policy(Entity::class, EntityPolicy::class);
@@ -70,6 +75,18 @@ class AppServiceProvider extends ServiceProvider
             return $user->tenants()
                 ->where('tenants.id', $resolvedTenantId)
                 ->exists();
+        });
+    }
+
+    protected function configureRateLimiters(): void
+    {
+        RateLimiter::for('ai-chat', function (Request $request): Limit {
+            $limit = max(1, (int) config('services.openai.rate_limit_per_minute', 30));
+            $tenantId = TenantContext::id($request) ?? 'no-tenant';
+            $userId = $request->user()?->getAuthIdentifier() ?? $request->ip();
+
+            return Limit::perMinute($limit)
+                ->by(sprintf('ai-chat:%s:%s', (string) $tenantId, (string) $userId));
         });
     }
 

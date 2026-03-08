@@ -49,6 +49,7 @@ const props = defineProps<{
     canManageMembers: boolean;
     canManageOnboarding: boolean;
     canManageBilling: boolean;
+    canEditTenant: boolean;
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -112,6 +113,9 @@ function removeMember(member: TenantMember): void {
                 <CardHeader class="flex flex-row items-center justify-between">
                     <CardTitle>{{ tenantDetails.name }}</CardTitle>
                     <div class="flex items-center gap-2">
+                        <Button v-if="canEditTenant" variant="outline" as-child>
+                            <Link :href="`/tenants/${tenantDetails.slug}/edit`">Editar tenant</Link>
+                        </Button>
                         <Button v-if="canManageOnboarding" variant="outline" as-child>
                             <Link href="/tenants/onboarding">Wizard inicial</Link>
                         </Button>

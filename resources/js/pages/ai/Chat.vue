@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import { computed, onMounted, ref, watch } from 'vue';
+import { ref } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -55,20 +55,30 @@ type AiResponsePayload = {
 const props = defineProps<{
     suggestedQuestions: string[];
     tenantId: number | null;
+    historyMessages: ChatMessage[];
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Chat IA', href: '/ai/chat' }];
 const draft = ref('');
 const sending = ref(false);
-const messages = ref<ChatMessage[]>([]);
-const storageKey = computed(() => `crm_ai_chat_history_tenant_${props.tenantId ?? 'none'}`);
+const messages = ref<ChatMessage[]>(Array.isArray(props.historyMessages) ? props.historyMessages : []);
 
 function csrfToken(): string {
     return (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null)?.content ?? '';
 }
 
 function nowLabel(): string {
-    return new Date().toLocaleString('pt-PT');
+    return new Date().toISOString();
+}
+
+function displayTimestamp(value: string): string {
+    const parsed = new Date(value);
+
+    if (Number.isNaN(parsed.getTime())) {
+        return value;
+    }
+
+    return parsed.toLocaleString('pt-PT');
 }
 
 function createMessage(role: ChatMessage['role'], text: string, links: ChatLink[] = []): ChatMessage {
@@ -81,58 +91,8 @@ function createMessage(role: ChatMessage['role'], text: string, links: ChatLink[
     };
 }
 
-function formatCurrency(value: number): string {
-    return new Intl.NumberFormat('pt-PT', {
-        style: 'currency',
-        currency: 'EUR',
-    }).format(value);
-}
-
-function stageLabel(stage: string | null): string {
-    if (stage === null) {
-        return 'todas as etapas';
-    }
-
-    const map: Record<string, string> = {
-        lead: 'Lead',
-        proposal: 'Proposta',
-        negotiation: 'Negociação',
-        follow_up: 'Follow Up',
-        won: 'Ganho',
-        lost: 'Perdido',
-    };
-
-    return map[stage] ?? stage;
-}
-
 function formatAssistantAnswer(payload: AiResponsePayload): string {
-    const data = payload.data;
-
-    if (typeof data === 'object' && data !== null && data.type === 'deal_summary') {
-        const typed = data as DealSummaryData;
-        return `Foram encontrados ${typed.count} negócios em ${stageLabel(typed.stage)} com valor total de ${formatCurrency(typed.total)}.`;
-    }
-
-    if (typeof data === 'object' && data !== null && data.type === 'contact_lookup') {
-        const typed = data as ContactLookupData;
-        if (!typed.found) {
-            return 'Não foi encontrado nenhum contacto com esse nome no tenant ativo.';
-        }
-
-        const fieldLabel = typed.field === 'mobile'
-            ? 'telemóvel'
-            : typed.field === 'phone'
-                ? 'telefone'
-                : 'email';
-
-        if (!typed.value) {
-            return `O contacto existe, mas não tem ${fieldLabel} registado.`;
-        }
-
-        return `O ${fieldLabel} de ${typed.contact?.name ?? 'este contacto'} é ${typed.value}.`;
-    }
-
-    return payload.answer || 'Sem resposta disponível.';
+    return payload.answer || 'Sem resposta disponivel.';
 }
 
 function extractLinks(payload: AiResponsePayload): ChatLink[] {
@@ -153,12 +113,12 @@ function extractLinks(payload: AiResponsePayload): ChatLink[] {
     if (typeof data === 'object' && data !== null && data.type === 'deal_summary') {
         const typed = data as DealSummaryData;
         const dealLinks = (typed.top_deals ?? []).slice(0, 3).map((deal) => ({
-            label: `Abrir negócio: ${deal.title}`,
+            label: `Abrir negocio: ${deal.title}`,
             href: `/deals/${deal.id}`,
         }));
 
         links.push(...dealLinks);
-        links.push({ label: 'Ver Kanban de negócios', href: '/deals' });
+        links.push({ label: 'Ver Kanban de negocios', href: '/deals' });
     }
 
     return links;
@@ -194,7 +154,7 @@ async function sendMessage(preFilledQuestion?: string): Promise<void> {
         if (!response.ok) {
             const fallback = typeof payload.answer === 'string'
                 ? payload.answer
-                : 'Não foi possível processar a pergunta.';
+                : 'Nao foi possivel processar a pergunta.';
 
             messages.value.push(createMessage('assistant', fallback));
 
@@ -212,30 +172,6 @@ async function sendMessage(preFilledQuestion?: string): Promise<void> {
         sending.value = false;
     }
 }
-
-onMounted(() => {
-    const raw = localStorage.getItem(storageKey.value);
-    if (!raw) {
-        return;
-    }
-
-    try {
-        const parsed = JSON.parse(raw) as ChatMessage[];
-        if (Array.isArray(parsed)) {
-            messages.value = parsed.slice(-40);
-        }
-    } catch {
-        messages.value = [];
-    }
-});
-
-watch(
-    messages,
-    (value) => {
-        localStorage.setItem(storageKey.value, JSON.stringify(value.slice(-40)));
-    },
-    { deep: true },
-);
 </script>
 
 <template>
@@ -246,7 +182,7 @@ watch(
             <Card>
                 <CardHeader>
                     <CardTitle>Chat inteligente</CardTitle>
-                    <CardDescription>Faz perguntas em linguagem natural sobre negócios e pessoas.</CardDescription>
+                    <CardDescription>Faz perguntas em linguagem natural sobre negocios e pessoas.</CardDescription>
                 </CardHeader>
                 <CardContent class="space-y-3">
                     <p class="text-sm font-medium">Perguntas sugeridas</p>
@@ -282,7 +218,7 @@ watch(
                             :class="message.role === 'user' ? 'bg-background ml-auto max-w-[85%]' : 'bg-muted mr-auto max-w-[90%]'"
                         >
                             <p class="text-xs text-muted-foreground">
-                                {{ message.role === 'user' ? 'Tu' : 'Assistente' }} - {{ message.created_at }}
+                                {{ message.role === 'user' ? 'Tu' : 'Assistente' }} - {{ displayTimestamp(message.created_at) }}
                             </p>
                             <p class="text-sm whitespace-pre-wrap">{{ message.text }}</p>
 
@@ -307,7 +243,7 @@ watch(
                             v-model="draft"
                             rows="3"
                             class="border-input bg-background ring-offset-background focus-visible:ring-ring w-full rounded-md border px-3 py-2 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none"
-                            placeholder="Ex.: Qual o volume de negócios em negociação?"
+                            placeholder="Ex.: Qual o volume de negocios em negociacao?"
                         />
                         <div class="flex justify-end">
                             <Button type="submit" :disabled="sending || draft.trim() === ''">

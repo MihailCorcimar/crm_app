@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\Tenants\TenantStoreRequest;
+use App\Http\Requests\Tenants\TenantUpdateRequest;
 use App\Models\Tenant;
 use App\Models\TenantSetting;
 use App\Support\TenantOnboardingService;
@@ -138,7 +139,49 @@ class TenantController extends Controller
             'canManageMembers' => $request->user()->can('authorizeMember', $tenant),
             'canManageOnboarding' => $request->user()->can('manageOnboarding', $tenant),
             'canManageBilling' => $request->user()->can('manageBilling', $tenant),
+            'canEditTenant' => $request->user()->can('update', $tenant),
         ]);
+    }
+
+    public function edit(Tenant $tenant, Request $request): Response
+    {
+        $this->authorize('update', $tenant);
+
+        $settings = $tenant->setting?->settings ?? [];
+
+        return Inertia::render('tenants/Edit', [
+            'tenant' => [
+                'id' => $tenant->id,
+                'name' => $tenant->name,
+                'slug' => $tenant->slug,
+                'settings' => [
+                    'brand_name' => (string) ($settings['brand_name'] ?? ''),
+                    'brand_primary_color' => (string) ($settings['brand_primary_color'] ?? '#1F2937'),
+                    'default_user_role' => (string) ($settings['default_user_role'] ?? 'member'),
+                    'allow_member_invites' => (bool) ($settings['allow_member_invites'] ?? false),
+                ],
+            ],
+            'canEditTenant' => $request->user()->can('update', $tenant),
+        ]);
+    }
+
+    public function update(TenantUpdateRequest $request, Tenant $tenant): RedirectResponse
+    {
+        $validated = $request->validated();
+
+        DB::transaction(function () use ($tenant, $validated): void {
+            $tenant->update([
+                'name' => $validated['name'],
+                'slug' => $validated['slug'],
+            ]);
+
+            TenantSetting::query()->updateOrCreate(
+                ['tenant_id' => $tenant->id],
+                ['settings' => $validated['settings'] ?? []],
+            );
+        });
+
+        return to_route('tenants.show', $tenant);
     }
 
     public function switchTenant(Tenant $tenant, Request $request): RedirectResponse

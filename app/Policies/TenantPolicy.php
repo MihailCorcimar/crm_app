@@ -24,6 +24,17 @@ class TenantPolicy
         return $user->canCreateTenants();
     }
 
+    public function update(User $user, Tenant $tenant): bool
+    {
+        return $tenant->members()
+            ->where('users.id', $user->id)
+            ->where(function ($query): void {
+                $query->where('tenant_user.role', 'owner')
+                    ->orWhere('tenant_user.can_create_tenants', true);
+            })
+            ->exists();
+    }
+
     public function authorizeMember(User $user, Tenant $tenant): bool
     {
         if ($tenant->isOwner($user)) {
