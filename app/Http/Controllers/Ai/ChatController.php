@@ -9,11 +9,13 @@ use App\Models\User;
 use App\Services\Ai\AiIntentService;
 use App\Services\Ai\AiPerformanceService;
 use App\Services\Ai\AiSecureQueryService;
+use App\Services\Ai\AiStreamingAnswerService;
 use App\Support\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Inertia\Inertia;
 use Inertia\Response;
 use RuntimeException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
 class ChatController extends Controller
@@ -22,6 +24,7 @@ class ChatController extends Controller
         private readonly AiIntentService $intentService,
         private readonly AiSecureQueryService $queryService,
         private readonly AiPerformanceService $performanceService,
+        private readonly AiStreamingAnswerService $streamingAnswerService,
     ) {
     }
 
@@ -205,6 +208,123 @@ class ChatController extends Controller
                 ],
             ],
         ]);
+    }
+
+    public function stream(ChatQueryRequest $request): StreamedResponse|JsonResponse
+    {
+        $tenantId = TenantContext::id($request);
+        abort_if($tenantId === null, 422, 'An active tenant is required.');
+
+        /** @var User $user */
+        $user = $request->user();
+        $userId = (int) $user->getAuthIdentifier();
+        $message = (string) $request->validated('message');
+
+        $this->storeHistoryMessage(
+            tenantId: $tenantId,
+            userId: $userId,
+            role: 'user',
+            text: $message,
+        );
+
+        try {
+            $resolvedIntent = $this->intentService->resolve($message, $tenantId, $userId);
+            $result = $this->queryService->execute($resolvedIntent, $user, $tenantId);
+        } catch (Throwable $exception) {
+            return response()->json([
+                'message' => $message,
+                'intent' => 'error',
+                'confidence' => 0,
+                'answer' => 'Nao foi possivel processar a pergunta neste momento.',
+                'data' => [
+                    'type' => 'error',
+                ],
+            ], 503);
+        }
+
+        $links = $this->extractLinks(is_array($result['data']) ? $result['data'] : []);
+
+        return response()->stream(
+            function () use ($message, $resolvedIntent, $result, $tenantId, $userId, $links): void {
+                try {
+                    $finalAnswer = $this->streamingAnswerService->stream(
+                        message: $message,
+                        resolvedIntent: $resolvedIntent,
+                        queryResult: $result,
+                        onChunk: function (string $delta): void {
+                            $this->streamPacket([
+                                'type' => 'chunk',
+                                'delta' => $delta,
+                            ]);
+                        },
+                    );
+
+                    $this->storeHistoryMessage(
+                        tenantId: $tenantId,
+                        userId: $userId,
+                        role: 'assistant',
+                        text: $finalAnswer,
+                        intent: (string) $resolvedIntent['intent'],
+                        confidence: (float) $resolvedIntent['confidence'],
+                        links: $links,
+                        contextData: is_array($result['data']) ? $result['data'] : [],
+                    );
+
+                    $this->streamPacket([
+                        'type' => 'done',
+                        'answer' => $finalAnswer,
+                        'intent' => $resolvedIntent['intent'],
+                        'confidence' => $resolvedIntent['confidence'],
+                        'data' => $result['data'],
+                        'links' => $links,
+                    ]);
+
+                    return;
+                } catch (Throwable) {
+                    $fallbackAnswer = (string) $result['answer'];
+
+                    $this->storeHistoryMessage(
+                        tenantId: $tenantId,
+                        userId: $userId,
+                        role: 'assistant',
+                        text: $fallbackAnswer,
+                        intent: (string) $resolvedIntent['intent'],
+                        confidence: (float) $resolvedIntent['confidence'],
+                        links: $links,
+                        contextData: is_array($result['data']) ? $result['data'] : [],
+                    );
+
+                    $this->streamPacket([
+                        'type' => 'fallback',
+                        'answer' => $fallbackAnswer,
+                        'intent' => $resolvedIntent['intent'],
+                        'confidence' => $resolvedIntent['confidence'],
+                        'data' => $result['data'],
+                        'links' => $links,
+                    ]);
+                }
+            },
+            200,
+            [
+                'Content-Type' => 'application/x-ndjson',
+                'Cache-Control' => 'no-cache, no-transform',
+                'X-Accel-Buffering' => 'no',
+            ],
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function streamPacket(array $payload): void
+    {
+        echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)."\n";
+
+        if (function_exists('ob_flush')) {
+            @ob_flush();
+        }
+
+        flush();
     }
 
     /**

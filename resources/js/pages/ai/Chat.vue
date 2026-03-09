@@ -52,6 +52,13 @@ type AiResponsePayload = {
     data: DealSummaryData | ContactLookupData | { type: 'unsupported' } | Record<string, unknown>;
 };
 
+type StreamPacket = {
+    type: string;
+    delta?: string;
+    answer?: string;
+    links?: ChatLink[];
+};
+
 const props = defineProps<{
     suggestedQuestions: string[];
     tenantId: number | null;
@@ -124,6 +131,114 @@ function extractLinks(payload: AiResponsePayload): ChatLink[] {
     return links;
 }
 
+function applyStreamPacket(packet: StreamPacket, assistantMessage: ChatMessage): boolean {
+    if (packet.type === 'chunk' && typeof packet.delta === 'string') {
+        assistantMessage.text += packet.delta;
+
+        return false;
+    }
+
+    if ((packet.type === 'done' || packet.type === 'fallback')) {
+        if (assistantMessage.text.trim() === '' && typeof packet.answer === 'string') {
+            assistantMessage.text = packet.answer;
+        }
+
+        if (Array.isArray(packet.links)) {
+            assistantMessage.links = packet.links;
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
+async function tryStreamMessage(messageText: string, assistantMessage: ChatMessage): Promise<boolean> {
+    const response = await fetch('/ai/chat/stream', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/x-ndjson',
+            'X-CSRF-TOKEN': csrfToken(),
+        },
+        body: JSON.stringify({ message: messageText }),
+    });
+
+    if (!response.ok || !response.body) {
+        return false;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let streamedAnyChunk = false;
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+            break;
+        }
+
+        buffer += decoder.decode(value, { stream: true });
+
+        while (true) {
+            const lineBreak = buffer.indexOf('\n');
+            if (lineBreak < 0) {
+                break;
+            }
+
+            const line = buffer.slice(0, lineBreak).trim();
+            buffer = buffer.slice(lineBreak + 1);
+
+            if (line === '') {
+                continue;
+            }
+
+            try {
+                const packet = JSON.parse(line) as StreamPacket;
+                if (packet.type === 'chunk') {
+                    streamedAnyChunk = true;
+                }
+
+                const finished = applyStreamPacket(packet, assistantMessage);
+                if (finished) {
+                    return true;
+                }
+            } catch {
+                // Ignore malformed chunk and continue reading.
+            }
+        }
+    }
+
+    return streamedAnyChunk && assistantMessage.text.trim() !== '';
+}
+
+async function sendClassicMessage(messageText: string, assistantMessage: ChatMessage): Promise<void> {
+    const response = await fetch('/ai/chat', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            'X-CSRF-TOKEN': csrfToken(),
+        },
+        body: JSON.stringify({ message: messageText }),
+    });
+
+    const payload = (await response.json()) as AiResponsePayload;
+
+    if (!response.ok) {
+        assistantMessage.text = typeof payload.answer === 'string'
+            ? payload.answer
+            : 'Nao foi possivel processar a pergunta.';
+        assistantMessage.links = [];
+
+        return;
+    }
+
+    assistantMessage.text = formatAssistantAnswer(payload);
+    assistantMessage.links = extractLinks(payload);
+}
+
 async function sendMessage(preFilledQuestion?: string): Promise<void> {
     if (sending.value) {
         return;
@@ -134,40 +249,32 @@ async function sendMessage(preFilledQuestion?: string): Promise<void> {
         return;
     }
 
-    messages.value.push(createMessage('user', messageText));
+    const userMessage = createMessage('user', messageText);
+    const assistantMessage = createMessage('assistant', '');
+
+    messages.value.push(userMessage);
+    messages.value.push(assistantMessage);
+
     draft.value = '';
     sending.value = true;
 
     try {
-        const response = await fetch('/ai/chat', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-                'X-CSRF-TOKEN': csrfToken(),
-            },
-            body: JSON.stringify({ message: messageText }),
-        });
+        const streamed = await tryStreamMessage(messageText, assistantMessage);
 
-        const payload = (await response.json()) as AiResponsePayload;
-
-        if (!response.ok) {
-            const fallback = typeof payload.answer === 'string'
-                ? payload.answer
-                : 'Nao foi possivel processar a pergunta.';
-
-            messages.value.push(createMessage('assistant', fallback));
-
-            return;
+        if (!streamed) {
+            await sendClassicMessage(messageText, assistantMessage);
         }
 
-        messages.value.push(
-            createMessage('assistant', formatAssistantAnswer(payload), extractLinks(payload)),
-        );
+        if (assistantMessage.text.trim() === '') {
+            assistantMessage.text = 'Sem resposta disponivel.';
+        }
     } catch {
-        messages.value.push(
-            createMessage('assistant', 'Ocorreu um erro ao comunicar com o chat. Tenta novamente.'),
-        );
+        try {
+            await sendClassicMessage(messageText, assistantMessage);
+        } catch {
+            assistantMessage.text = 'Ocorreu um erro ao comunicar com o chat. Tenta novamente.';
+            assistantMessage.links = [];
+        }
     } finally {
         sending.value = false;
     }

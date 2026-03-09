@@ -53,6 +53,7 @@ Route::middleware(['auth'])->group(function (): void {
 
     Route::middleware('tenant.active')->group(function (): void {
         Route::get('ai/chat', [AiChatController::class, 'index'])->name('ai.chat.index');
+        Route::post('ai/chat/stream', [AiChatController::class, 'stream'])->middleware('throttle:ai-chat')->name('ai.chat.stream');
         Route::post('ai/chat', [AiChatController::class, 'store'])->middleware('throttle:ai-chat')->name('ai.chat.store');
 
         Route::resource('access/users', UserManagementController::class)
