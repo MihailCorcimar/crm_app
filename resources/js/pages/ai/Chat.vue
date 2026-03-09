@@ -59,16 +59,42 @@ type StreamPacket = {
     links?: ChatLink[];
 };
 
+type AiSuggestion = {
+    id: number;
+    title: string;
+    reason: string;
+    next_step: string | null;
+    action_type: string;
+    source_type: string;
+    priority_score: number;
+    status: string;
+    suggested_for_at: string | null;
+    deferred_until: string | null;
+    deal: {
+        id: number;
+        title: string;
+        stage: string;
+    } | null;
+    contact: {
+        id: number;
+        name: string;
+    } | null;
+};
+
 const props = defineProps<{
     suggestedQuestions: string[];
     tenantId: number | null;
     historyMessages: ChatMessage[];
+    suggestions: AiSuggestion[];
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Chat IA', href: '/ai/chat' }];
 const draft = ref('');
 const sending = ref(false);
 const messages = ref<ChatMessage[]>(Array.isArray(props.historyMessages) ? props.historyMessages : []);
+const suggestions = ref<AiSuggestion[]>(Array.isArray(props.suggestions) ? props.suggestions : []);
+const suggestionsLoading = ref(false);
+const activeSuggestionId = ref<number | null>(null);
 
 function csrfToken(): string {
     return (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null)?.content ?? '';
@@ -96,6 +122,98 @@ function createMessage(role: ChatMessage['role'], text: string, links: ChatLink[
         created_at: nowLabel(),
         links,
     };
+}
+
+function actionLabel(actionType: string): string {
+    return ({
+        call: 'Telefonar',
+        meeting: 'Marcar reunião',
+        task: 'Criar tarefa',
+        note: 'Adicionar nota',
+        send_proposal: 'Enviar proposta',
+        follow_up_email: 'Enviar follow up',
+        request_docs: 'Pedir documentos',
+        validate_expectations: 'Validar expectativas',
+    }[actionType] ?? 'Executar ação');
+}
+
+async function loadSuggestions(): Promise<void> {
+    suggestionsLoading.value = true;
+
+    try {
+        const response = await fetch('/ai/suggestions', {
+            method: 'GET',
+            headers: {
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': csrfToken(),
+            },
+        });
+
+        if (!response.ok) {
+            return;
+        }
+
+        const payload = (await response.json()) as { suggestions?: AiSuggestion[] };
+        suggestions.value = Array.isArray(payload.suggestions) ? payload.suggestions : [];
+    } finally {
+        suggestionsLoading.value = false;
+    }
+}
+
+async function refreshSuggestions(): Promise<void> {
+    suggestionsLoading.value = true;
+
+    try {
+        const response = await fetch('/ai/suggestions/refresh', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': csrfToken(),
+            },
+            body: JSON.stringify({}),
+        });
+
+        if (!response.ok) {
+            return;
+        }
+
+        const payload = (await response.json()) as { suggestions?: AiSuggestion[] };
+        suggestions.value = Array.isArray(payload.suggestions) ? payload.suggestions : [];
+    } finally {
+        suggestionsLoading.value = false;
+    }
+}
+
+async function applySuggestionAction(suggestionId: number, action: 'accept' | 'defer' | 'archive'): Promise<void> {
+    if (activeSuggestionId.value !== null) {
+        return;
+    }
+
+    activeSuggestionId.value = suggestionId;
+
+    try {
+        const endpoint = `/ai/suggestions/${suggestionId}/${action}`;
+        const body = action === 'defer' ? { days: 2 } : {};
+
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': csrfToken(),
+            },
+            body: JSON.stringify(body),
+        });
+
+        if (!response.ok) {
+            return;
+        }
+
+        await loadSuggestions();
+    } finally {
+        activeSuggestionId.value = null;
+    }
 }
 
 function formatAssistantAnswer(payload: AiResponsePayload): string {
@@ -289,7 +407,7 @@ async function sendMessage(preFilledQuestion?: string): Promise<void> {
             <Card>
                 <CardHeader>
                     <CardTitle>Chat inteligente</CardTitle>
-                    <CardDescription>Faz perguntas em linguagem natural sobre negocios e pessoas.</CardDescription>
+                    <CardDescription>Faz perguntas em linguagem natural sobre negócios e pessoas.</CardDescription>
                 </CardHeader>
                 <CardContent class="space-y-3">
                     <p class="text-sm font-medium">Perguntas sugeridas</p>
@@ -304,6 +422,92 @@ async function sendMessage(preFilledQuestion?: string): Promise<void> {
                         >
                             {{ question }}
                         </Button>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader class="flex flex-row items-center justify-between gap-3">
+                    <div>
+                        <CardTitle>Sugestões do agente comercial</CardTitle>
+                        <CardDescription>Ações recomendadas com maior impacto no pipeline.</CardDescription>
+                    </div>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        :disabled="suggestionsLoading"
+                        @click="refreshSuggestions"
+                    >
+                        {{ suggestionsLoading ? 'A atualizar...' : 'Atualizar sugestões' }}
+                    </Button>
+                </CardHeader>
+                <CardContent class="space-y-3">
+                    <p v-if="suggestions.length === 0" class="text-sm text-muted-foreground">
+                        Sem sugestões pendentes neste momento.
+                    </p>
+
+                    <div v-for="suggestion in suggestions" :key="suggestion.id" class="space-y-3 rounded-md border p-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <p class="text-sm font-semibold">{{ suggestion.title }}</p>
+                            <span class="text-xs text-muted-foreground">
+                                Prioridade {{ suggestion.priority_score }} | {{ actionLabel(suggestion.action_type) }}
+                            </span>
+                        </div>
+
+                        <p class="text-sm">{{ suggestion.reason }}</p>
+                        <p v-if="suggestion.next_step" class="text-sm text-muted-foreground">
+                            Próximo passo: {{ suggestion.next_step }}
+                        </p>
+
+                        <div class="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                            <span v-if="suggestion.deal">
+                                Negócio: {{ suggestion.deal.title }}
+                            </span>
+                            <span v-if="suggestion.contact">
+                                Pessoa: {{ suggestion.contact.name }}
+                            </span>
+                            <span v-if="suggestion.suggested_for_at">
+                                Sugerido para: {{ displayTimestamp(suggestion.suggested_for_at) }}
+                            </span>
+                        </div>
+
+                        <div class="flex flex-wrap gap-2">
+                            <Button
+                                size="sm"
+                                type="button"
+                                :disabled="activeSuggestionId === suggestion.id"
+                                @click="applySuggestionAction(suggestion.id, 'accept')"
+                            >
+                                Aceitar
+                            </Button>
+                            <Button
+                                size="sm"
+                                type="button"
+                                variant="outline"
+                                :disabled="activeSuggestionId === suggestion.id"
+                                @click="applySuggestionAction(suggestion.id, 'defer')"
+                            >
+                                Adiar 2 dias
+                            </Button>
+                            <Button
+                                size="sm"
+                                type="button"
+                                variant="ghost"
+                                :disabled="activeSuggestionId === suggestion.id"
+                                @click="applySuggestionAction(suggestion.id, 'archive')"
+                            >
+                                Arquivar
+                            </Button>
+                            <Button
+                                v-if="suggestion.deal"
+                                size="sm"
+                                type="button"
+                                variant="outline"
+                                as-child
+                            >
+                                <Link :href="`/deals/${suggestion.deal.id}`">Abrir negócio</Link>
+                            </Button>
+                        </div>
                     </div>
                 </CardContent>
             </Card>

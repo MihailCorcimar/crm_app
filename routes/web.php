@@ -3,6 +3,7 @@
 use App\Http\Controllers\Access\PermissionGroupController;
 use App\Http\Controllers\Access\UserManagementController;
 use App\Http\Controllers\Ai\ChatController as AiChatController;
+use App\Http\Controllers\Ai\SuggestionController as AiSuggestionController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\DealController;
@@ -55,6 +56,11 @@ Route::middleware(['auth'])->group(function (): void {
         Route::get('ai/chat', [AiChatController::class, 'index'])->name('ai.chat.index');
         Route::post('ai/chat/stream', [AiChatController::class, 'stream'])->middleware('throttle:ai-chat')->name('ai.chat.stream');
         Route::post('ai/chat', [AiChatController::class, 'store'])->middleware('throttle:ai-chat')->name('ai.chat.store');
+        Route::get('ai/suggestions', [AiSuggestionController::class, 'index'])->name('ai.suggestions.index');
+        Route::post('ai/suggestions/refresh', [AiSuggestionController::class, 'refresh'])->name('ai.suggestions.refresh');
+        Route::post('ai/suggestions/{suggestion}/accept', [AiSuggestionController::class, 'accept'])->name('ai.suggestions.accept');
+        Route::post('ai/suggestions/{suggestion}/defer', [AiSuggestionController::class, 'defer'])->name('ai.suggestions.defer');
+        Route::post('ai/suggestions/{suggestion}/archive', [AiSuggestionController::class, 'archive'])->name('ai.suggestions.archive');
 
         Route::resource('access/users', UserManagementController::class)
             ->except(['show'])

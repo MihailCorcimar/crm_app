@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Ai;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Ai\ChatQueryRequest;
 use App\Models\AiChatMessage;
+use App\Models\AiSalesSuggestion;
 use App\Models\User;
+use App\Services\Ai\AiCommercialAgentService;
 use App\Services\Ai\AiIntentService;
 use App\Services\Ai\AiPerformanceService;
 use App\Services\Ai\AiSecureQueryService;
@@ -25,8 +27,8 @@ class ChatController extends Controller
         private readonly AiSecureQueryService $queryService,
         private readonly AiPerformanceService $performanceService,
         private readonly AiStreamingAnswerService $streamingAnswerService,
-    ) {
-    }
+        private readonly AiCommercialAgentService $commercialAgentService,
+    ) {}
 
     public function index(): Response
     {
@@ -44,6 +46,9 @@ class ChatController extends Controller
             'tenantId' => $tenantId,
             'historyMessages' => $tenantId !== null && $user !== null
                 ? $this->historyMessagesFor($tenantId, (int) $user->getAuthIdentifier())
+                : [],
+            'suggestions' => $tenantId !== null && $user !== null
+                ? $this->suggestionsFor($tenantId, (int) $user->getAuthIdentifier())
                 : [],
         ]);
     }
@@ -440,5 +445,44 @@ class ChatController extends Controller
         }
 
         return $links;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function suggestionsFor(int $tenantId, int $userId): array
+    {
+        return $this->commercialAgentService
+            ->suggestionsForUser($tenantId, $userId)
+            ->map(function (AiSalesSuggestion $suggestion): array {
+                return [
+                    'id' => (int) $suggestion->id,
+                    'title' => (string) $suggestion->title,
+                    'reason' => (string) $suggestion->reason,
+                    'next_step' => $suggestion->next_step,
+                    'action_type' => (string) $suggestion->action_type,
+                    'source_type' => (string) $suggestion->source_type,
+                    'priority_score' => (int) $suggestion->priority_score,
+                    'status' => (string) $suggestion->status,
+                    'deferred_until' => $suggestion->deferred_until?->toIso8601String(),
+                    'suggested_for_at' => $suggestion->suggested_for_at?->toIso8601String(),
+                    'deal' => $suggestion->deal === null ? null : [
+                        'id' => (int) $suggestion->deal->id,
+                        'title' => (string) $suggestion->deal->title,
+                        'stage' => (string) $suggestion->deal->stage,
+                    ],
+                    'contact' => $suggestion->contact === null ? null : [
+                        'id' => (int) $suggestion->contact->id,
+                        'name' => trim(
+                            implode(' ', array_filter([
+                                (string) $suggestion->contact->first_name,
+                                (string) $suggestion->contact->last_name,
+                            ]))
+                        ),
+                    ],
+                ];
+            })
+            ->values()
+            ->all();
     }
 }

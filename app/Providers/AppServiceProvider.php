@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Models\AiSalesSuggestion;
 use App\Models\CalendarEvent;
 use App\Models\Contact;
 use App\Models\Deal;
@@ -9,6 +10,10 @@ use App\Models\Entity;
 use App\Models\Item;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Observers\CalendarEventObserver;
+use App\Observers\ContactObserver;
+use App\Observers\DealObserver;
+use App\Policies\AiSalesSuggestionPolicy;
 use App\Policies\CalendarEventPolicy;
 use App\Policies\ContactPolicy;
 use App\Policies\DealPolicy;
@@ -50,6 +55,11 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(CalendarEvent::class, CalendarEventPolicy::class);
         Gate::policy(Deal::class, DealPolicy::class);
         Gate::policy(Item::class, ItemPolicy::class);
+        Gate::policy(AiSalesSuggestion::class, AiSalesSuggestionPolicy::class);
+
+        Deal::observe(DealObserver::class);
+        Contact::observe(ContactObserver::class);
+        CalendarEvent::observe(CalendarEventObserver::class);
 
         Gate::define('tenant.active', function (User $user): bool {
             if (! is_numeric($user->current_tenant_id)) {
