@@ -47,4 +47,8 @@ return [
         'intent_cache_seconds' => (int) env('OPENAI_INTENT_CACHE_SECONDS', 120),
     ],
 
+    'mail_inbound' => [
+        'secret' => env('MAIL_INBOUND_WEBHOOK_SECRET'),
+    ],
+
 ];

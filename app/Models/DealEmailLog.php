@@ -19,9 +19,11 @@ class DealEmailLog extends Model
         'deal_id',
         'email_type',
         'to_email',
+        'from_email',
         'subject',
         'body',
         'attachment_name',
+        'tracking_token',
         'sent_by',
         'sent_at',
     ];

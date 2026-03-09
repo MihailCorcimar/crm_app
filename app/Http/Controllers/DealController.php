@@ -2,20 +2,20 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\DealProposalUploadRequest;
 use App\Http\Requests\DealProductRequest;
+use App\Http\Requests\DealProposalUploadRequest;
 use App\Http\Requests\DealQuickActivityRequest;
 use App\Http\Requests\DealRequest;
 use App\Http\Requests\DealSendProposalEmailRequest;
 use App\Http\Requests\DealStageRequest;
+use App\Mail\DealProposalMail;
 use App\Models\CalendarEvent;
 use App\Models\Deal;
-use App\Models\DealProduct;
 use App\Models\DealEmailLog;
+use App\Models\DealProduct;
 use App\Models\Entity;
 use App\Models\Item;
 use App\Models\User;
-use App\Mail\DealProposalMail;
 use App\Support\DealFollowUpService;
 use App\Support\DealStageService;
 use App\Support\TenantContext;
@@ -35,8 +35,7 @@ class DealController extends Controller
     public function __construct(
         private readonly DealStageService $dealStageService,
         private readonly DealFollowUpService $dealFollowUpService,
-    )
-    {
+    ) {
         $this->authorizeResource(Deal::class, 'deal');
     }
 
@@ -653,15 +652,19 @@ class DealController extends Controller
             ->get()
             ->map(function (DealEmailLog $emailLog): array {
                 $isFollowUp = $emailLog->email_type === 'follow_up';
+                $isFollowUpReply = $emailLog->email_type === 'follow_up_reply';
 
                 return [
                     'key' => sprintf('deal-email-%d', $emailLog->id),
                     'entry_type' => 'email',
-                    'activity_type' => $isFollowUp ? 'follow_up' : 'proposal',
-                    'title' => $isFollowUp ? 'Follow up enviado por email' : 'Proposta enviada por email',
+                    'activity_type' => $isFollowUp || $isFollowUpReply ? 'follow_up' : 'proposal',
+                    'title' => $isFollowUpReply
+                        ? 'Resposta do cliente por email'
+                        : ($isFollowUp ? 'Follow up enviado por email' : 'Proposta enviada por email'),
                     'details' => sprintf(
-                        'Para: %s | Assunto: %s',
-                        $emailLog->to_email,
+                        '%s: %s | Assunto: %s',
+                        $isFollowUpReply ? 'De' : 'Para',
+                        $isFollowUpReply ? ($emailLog->from_email ?: $emailLog->to_email) : $emailLog->to_email,
                         $emailLog->subject
                     ),
                     'owner' => $emailLog->sender?->name,

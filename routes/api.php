@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Webhook\DealInboundReplyWebhookController;
 use App\Models\Tenant;
 use App\Support\TenantContext;
 use Illuminate\Http\Request;
@@ -25,3 +26,6 @@ Route::middleware(['auth', 'tenant.active'])->get('/tenant/context', function (R
         'tenant' => $activeTenant,
     ]);
 });
+
+Route::post('/mail/inbound/deal-replies', DealInboundReplyWebhookController::class)
+    ->middleware('throttle:30,1');

@@ -8,16 +8,22 @@ use App\Models\Deal;
 use App\Models\DealEmailLog;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 
 class DealFollowUpService
 {
     public const STOP_STAGE_CHANGED = 'stage_changed';
+
     public const STOP_CUSTOMER_REPLIED = 'customer_replied';
+
     public const STOP_MANUAL = 'manual_cancel';
+
     public const STOP_MISSING_RECIPIENT = 'missing_recipient';
 
     private const FOLLOW_UP_TIMEZONE = 'Europe/Lisbon';
+
     private const BUSINESS_START_HOUR = 9;
+
     private const BUSINESS_END_HOUR = 18;
 
     /**
@@ -133,17 +139,20 @@ class DealFollowUpService
         foreach ($dueDeals as $deal) {
             if ($deal->stage !== Deal::STAGE_FOLLOW_UP) {
                 $this->stop($deal, self::STOP_STAGE_CHANGED);
+
                 continue;
             }
 
             if ($deal->follow_up_customer_replied_at !== null) {
                 $this->stop($deal, self::STOP_CUSTOMER_REPLIED);
+
                 continue;
             }
 
             $recipient = $this->resolveRecipient($deal);
             if ($recipient === null) {
                 $this->stop($deal, self::STOP_MISSING_RECIPIENT);
+
                 continue;
             }
 
@@ -158,11 +167,14 @@ class DealFollowUpService
                 $template['body'],
                 $deal
             );
+            $trackingToken = strtoupper(Str::random(12));
+            $subjectWithToken = sprintf('%s [FU:%s]', $subject, $trackingToken);
+            $bodyWithToken = trim($body)."\n\nRef: FU:{$trackingToken}";
 
             try {
                 Mail::to($recipient)->send(new DealFollowUpMail(
-                    subjectLine: $subject,
-                    bodyText: $body
+                    subjectLine: $subjectWithToken,
+                    bodyText: $bodyWithToken
                 ));
             } catch (\Throwable $exception) {
                 report($exception);
@@ -172,6 +184,7 @@ class DealFollowUpService
                 $deal->forceFill([
                     'follow_up_next_send_at' => $this->toAppTimezone($retryLocal),
                 ])->save();
+
                 continue;
             }
 
@@ -180,9 +193,11 @@ class DealFollowUpService
                 'deal_id' => $deal->id,
                 'email_type' => 'follow_up',
                 'to_email' => $recipient,
-                'subject' => $subject,
-                'body' => $body,
+                'from_email' => null,
+                'subject' => $subjectWithToken,
+                'body' => $bodyWithToken,
                 'attachment_name' => null,
+                'tracking_token' => $trackingToken,
                 'sent_by' => $deal->owner_id,
                 'sent_at' => now(),
             ]);
