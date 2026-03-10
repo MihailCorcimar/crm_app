@@ -47,9 +47,10 @@ class DealProductStatsController extends Controller
             ]);
         }
 
-        $rows = $this->aggregatedProductsQuery($filters, $tenantId)
-            ->orderByDesc('total_value')
-            ->get();
+        $rows = $this->applyProductOrdering(
+            $this->aggregatedProductsQuery($filters, $tenantId),
+            $filters
+        )->get();
 
         $products = $rows
             ->map(static fn (object $row): array => [
@@ -92,9 +93,10 @@ class DealProductStatsController extends Controller
             abort(404);
         }
 
-        $rows = $this->aggregatedProductsQuery($filters, $tenantId)
-            ->orderByDesc('total_value')
-            ->get();
+        $rows = $this->applyProductOrdering(
+            $this->aggregatedProductsQuery($filters, $tenantId),
+            $filters
+        )->get();
 
         $filename = sprintf('estatisticas_produtos_negocios_%s.csv', now()->format('Ymd_His'));
 
@@ -162,8 +164,9 @@ class DealProductStatsController extends Controller
                 'deals.expected_close_date',
                 'entities.name',
                 'owners.name',
-            ])
-            ->orderByDesc('total_value');
+            ]);
+
+        $this->applyDealsOrdering($dealsQuery, $filters);
 
         $totalsQuery = $this->baseQuery($filters, $tenantId)
             ->where('items.id', $item->id)
@@ -211,7 +214,7 @@ class DealProductStatsController extends Controller
     }
 
     /**
-     * @param  array{owner_id: int|null, stage: string|null, expected_close_from: string|null, expected_close_to: string|null, value_min: float|null, value_max: float|null}  $filters
+     * @param  array{owner_id: int|null, stage: string|null, expected_close_from: string|null, expected_close_to: string|null, value_min: float|null, value_max: float|null, sort_by: string, sort_direction: string}  $filters
      */
     private function aggregatedProductsQuery(array $filters, int $tenantId): QueryBuilder
     {
@@ -235,7 +238,7 @@ class DealProductStatsController extends Controller
     }
 
     /**
-     * @param  array{owner_id: int|null, stage: string|null, expected_close_from: string|null, expected_close_to: string|null, value_min: float|null, value_max: float|null}  $filters
+     * @param  array{owner_id: int|null, stage: string|null, expected_close_from: string|null, expected_close_to: string|null, value_min: float|null, value_max: float|null, sort_by: string, sort_direction: string}  $filters
      */
     private function baseQuery(array $filters, int $tenantId): QueryBuilder
     {
@@ -302,12 +305,14 @@ class DealProductStatsController extends Controller
             'expected_close_to' => ['nullable', 'date', 'after_or_equal:expected_close_from'],
             'value_min' => ['nullable', 'numeric', 'min:0'],
             'value_max' => ['nullable', 'numeric', 'gte:value_min'],
+            'sort_by' => ['nullable', 'string', Rule::in(['total_value', 'total_quantity'])],
+            'sort_direction' => ['nullable', 'string', Rule::in(['asc', 'desc'])],
         ]);
     }
 
     /**
      * @param  array<string, mixed>  $validated
-     * @return array{owner_id: int|null, stage: string|null, expected_close_from: string|null, expected_close_to: string|null, value_min: float|null, value_max: float|null}
+     * @return array{owner_id: int|null, stage: string|null, expected_close_from: string|null, expected_close_to: string|null, value_min: float|null, value_max: float|null, sort_by: string, sort_direction: string}
      */
     private function normalizedFilters(array $validated): array
     {
@@ -318,6 +323,8 @@ class DealProductStatsController extends Controller
             'expected_close_to' => isset($validated['expected_close_to']) ? (string) $validated['expected_close_to'] : null,
             'value_min' => isset($validated['value_min']) ? (float) $validated['value_min'] : null,
             'value_max' => isset($validated['value_max']) ? (float) $validated['value_max'] : null,
+            'sort_by' => isset($validated['sort_by']) ? (string) $validated['sort_by'] : 'total_value',
+            'sort_direction' => isset($validated['sort_direction']) ? (string) $validated['sort_direction'] : 'desc',
         ];
     }
 
@@ -371,5 +378,32 @@ class DealProductStatsController extends Controller
         }
 
         return sprintf('Produto #%d', $item->id);
+    }
+
+    /**
+     * @param  array{sort_by: string, sort_direction: string}  $filters
+     */
+    private function applyProductOrdering(QueryBuilder $query, array $filters): QueryBuilder
+    {
+        $orderColumn = $filters['sort_by'] === 'total_quantity' ? 'total_quantity' : 'total_value';
+        $direction = strtolower($filters['sort_direction']) === 'asc' ? 'asc' : 'desc';
+
+        return $query
+            ->orderBy($orderColumn, $direction)
+            ->orderBy('total_value', 'desc')
+            ->orderBy('item_name');
+    }
+
+    /**
+     * @param  array{sort_by: string, sort_direction: string}  $filters
+     */
+    private function applyDealsOrdering(QueryBuilder $query, array $filters): void
+    {
+        $orderColumn = $filters['sort_by'] === 'total_quantity' ? 'total_quantity' : 'total_value';
+        $direction = strtolower($filters['sort_direction']) === 'asc' ? 'asc' : 'desc';
+
+        $query
+            ->orderBy($orderColumn, $direction)
+            ->orderBy('deals.title');
     }
 }

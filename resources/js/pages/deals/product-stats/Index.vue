@@ -34,6 +34,8 @@ type ProductFilters = {
     expected_close_to: string | null;
     value_min: number | null;
     value_max: number | null;
+    sort_by: 'total_value' | 'total_quantity';
+    sort_direction: 'asc' | 'desc';
 };
 
 const props = defineProps<{
@@ -61,6 +63,8 @@ const filterForm = useForm({
     expected_close_to: props.filters.expected_close_to ?? '',
     value_min: props.filters.value_min ?? '',
     value_max: props.filters.value_max ?? '',
+    sort_by: props.filters.sort_by ?? 'total_value',
+    sort_direction: props.filters.sort_direction ?? 'desc',
 });
 
 const exportUrl = computed(() => {
@@ -85,6 +89,8 @@ function clearFilters(): void {
     filterForm.expected_close_to = '';
     filterForm.value_min = '';
     filterForm.value_max = '';
+    filterForm.sort_by = 'total_value';
+    filterForm.sort_direction = 'desc';
 
     applyFilters();
 }
@@ -114,6 +120,14 @@ function buildParams(): URLSearchParams {
 
     if (filterForm.value_max !== '') {
         params.set('value_max', String(filterForm.value_max));
+    }
+
+    if (filterForm.sort_by !== 'total_value') {
+        params.set('sort_by', String(filterForm.sort_by));
+    }
+
+    if (filterForm.sort_direction !== 'desc') {
+        params.set('sort_direction', String(filterForm.sort_direction));
     }
 
     return params;
@@ -197,6 +211,28 @@ function formatQuantity(value: number): string {
                             <Input v-model="filterForm.value_max" type="number" min="0" step="0.01" placeholder="10000.00" />
                         </div>
 
+                        <div class="grid gap-1">
+                            <label class="text-sm font-medium">Ordenar por</label>
+                            <select
+                                v-model="filterForm.sort_by"
+                                class="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none"
+                            >
+                                <option value="total_value">Valor total</option>
+                                <option value="total_quantity">Quantidade total</option>
+                            </select>
+                        </div>
+
+                        <div class="grid gap-1">
+                            <label class="text-sm font-medium">Ordem</label>
+                            <select
+                                v-model="filterForm.sort_direction"
+                                class="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none"
+                            >
+                                <option value="desc">Maior para menor</option>
+                                <option value="asc">Menor para maior</option>
+                            </select>
+                        </div>
+
                         <div class="flex gap-2 md:col-span-6">
                             <Button type="submit" :disabled="filterForm.processing">Aplicar filtros</Button>
                             <Button type="button" variant="outline" :disabled="filterForm.processing" @click="clearFilters">Limpar</Button>
@@ -261,4 +297,3 @@ function formatQuantity(value: number): string {
         </div>
     </AppLayout>
 </template>
-

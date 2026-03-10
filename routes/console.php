@@ -9,4 +9,5 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('deals:process-follow-ups')->everyFiveMinutes();
+Schedule::command('deals:run-automation-rules')->hourly();
 Schedule::command('ai:refresh-sales-suggestions')->dailyAt('08:00');

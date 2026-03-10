@@ -3,9 +3,11 @@
 namespace App\Providers;
 
 use App\Models\AiSalesSuggestion;
+use App\Models\AutomationNotification;
 use App\Models\CalendarEvent;
 use App\Models\Contact;
 use App\Models\Deal;
+use App\Models\DealAutomationRule;
 use App\Models\Entity;
 use App\Models\Item;
 use App\Models\Tenant;
@@ -14,8 +16,10 @@ use App\Observers\CalendarEventObserver;
 use App\Observers\ContactObserver;
 use App\Observers\DealObserver;
 use App\Policies\AiSalesSuggestionPolicy;
+use App\Policies\AutomationNotificationPolicy;
 use App\Policies\CalendarEventPolicy;
 use App\Policies\ContactPolicy;
+use App\Policies\DealAutomationRulePolicy;
 use App\Policies\DealPolicy;
 use App\Policies\EntityPolicy;
 use App\Policies\ItemPolicy;
@@ -56,6 +60,8 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Deal::class, DealPolicy::class);
         Gate::policy(Item::class, ItemPolicy::class);
         Gate::policy(AiSalesSuggestion::class, AiSalesSuggestionPolicy::class);
+        Gate::policy(DealAutomationRule::class, DealAutomationRulePolicy::class);
+        Gate::policy(AutomationNotification::class, AutomationNotificationPolicy::class);
 
         Deal::observe(DealObserver::class);
         Contact::observe(ContactObserver::class);

@@ -1,6 +1,6 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { BarChart3, BookOpenText, BriefcaseBusiness, Building2, Calendar, MessageSquare, Package, Settings, Shield, Users } from 'lucide-vue-next';
+import { BarChart3, BookOpenText, BriefcaseBusiness, Building2, Calendar, MessageSquare, Package, Settings, Shield, Users, Workflow } from 'lucide-vue-next';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
 import {
@@ -57,6 +57,17 @@ const mainNavItems: NavItem[] = [
         title: 'Chat IA',
         href: '/ai/chat',
         icon: MessageSquare,
+    },
+    {
+        title: 'Automacoes',
+        href: '/automations/deal-rules',
+        icon: Workflow,
+        children: [
+            {
+                title: 'Regras de inatividade',
+                href: '/automations/deal-rules',
+            },
+        ],
     },
     {
         title: 'Administração',

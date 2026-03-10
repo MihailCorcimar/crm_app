@@ -6,6 +6,7 @@ use App\Http\Controllers\Ai\ChatController as AiChatController;
 use App\Http\Controllers\Ai\SuggestionController as AiSuggestionController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\ContactController;
+use App\Http\Controllers\DealAutomationRuleController;
 use App\Http\Controllers\DealController;
 use App\Http\Controllers\DealProductStatsController;
 use App\Http\Controllers\EntityController;
@@ -70,6 +71,19 @@ Route::middleware(['auth'])->group(function (): void {
             ->names('access.permission-groups');
 
         Route::get('logs', [LogController::class, 'index'])->name('logs.index');
+
+        Route::post('automations/deal-rules/run-now', [DealAutomationRuleController::class, 'runNow'])
+            ->name('automations.deal-rules.run-now');
+        Route::patch('automations/deal-rules/{rule}/toggle-status', [DealAutomationRuleController::class, 'toggleStatus'])
+            ->name('automations.deal-rules.toggle-status');
+        Route::patch('automations/notifications/{notification}/read', [DealAutomationRuleController::class, 'markNotificationRead'])
+            ->name('automations.notifications.read');
+        Route::patch('automations/notifications/read-all', [DealAutomationRuleController::class, 'markAllNotificationsRead'])
+            ->name('automations.notifications.read-all');
+        Route::resource('automations/deal-rules', DealAutomationRuleController::class)
+            ->except(['show'])
+            ->parameters(['deal-rules' => 'rule'])
+            ->names('automations.deal-rules');
 
         Route::resource('calendar', CalendarController::class)
             ->except(['show'])

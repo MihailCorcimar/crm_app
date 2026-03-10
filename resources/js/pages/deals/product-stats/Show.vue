@@ -18,6 +18,8 @@ type ProductFilters = {
     expected_close_to: string | null;
     value_min: number | null;
     value_max: number | null;
+    sort_by: 'total_value' | 'total_quantity';
+    sort_direction: 'asc' | 'desc';
 };
 
 type DealRow = {
@@ -89,6 +91,14 @@ const backUrl = computed(() => {
 
     if (props.filters.value_max !== null) {
         params.set('value_max', String(props.filters.value_max));
+    }
+
+    if (props.filters.sort_by !== 'total_value') {
+        params.set('sort_by', props.filters.sort_by);
+    }
+
+    if (props.filters.sort_direction !== 'desc') {
+        params.set('sort_direction', props.filters.sort_direction);
     }
 
     const query = params.toString();
@@ -211,4 +221,3 @@ function formatQuantity(value: number): string {
         </div>
     </AppLayout>
 </template>
-
