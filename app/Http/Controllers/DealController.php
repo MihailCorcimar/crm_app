@@ -9,6 +9,7 @@ use App\Http\Requests\DealRequest;
 use App\Http\Requests\DealSendProposalEmailRequest;
 use App\Http\Requests\DealStageRequest;
 use App\Mail\DealProposalMail;
+use App\Models\ActivityLog;
 use App\Models\CalendarEvent;
 use App\Models\Deal;
 use App\Models\DealEmailLog;
@@ -20,6 +21,7 @@ use App\Support\DealFollowUpService;
 use App\Support\DealStageService;
 use App\Support\TenantContext;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -176,6 +178,16 @@ class DealController extends Controller
         ]);
     }
 
+    public function timelineFeed(Deal $deal): JsonResponse
+    {
+        $this->authorize('view', $deal);
+
+        return response()->json([
+            'timeline' => $this->timeline($deal),
+            'generated_at' => now()->toIso8601String(),
+        ]);
+    }
+
     public function storeProposal(DealProposalUploadRequest $request, Deal $deal): RedirectResponse
     {
         $file = $request->file('proposal_file');
@@ -228,7 +240,7 @@ class DealController extends Controller
 
         if (! Storage::disk('local')->exists($deal->proposal_path)) {
             return back()->withErrors([
-                'proposal_file' => 'O ficheiro da proposta nao foi encontrado. Volta a carregar a proposta.',
+                'proposal_file' => 'O ficheiro da proposta não foi encontrado. Volta a carregar a proposta.',
             ]);
         }
 
@@ -590,10 +602,22 @@ class DealController extends Controller
     }
 
     /**
-     * @return array<int, array{key: string, entry_type: string, activity_type: string|null, title: string, details: string, owner: string|null, occurred_at: string}>
+     * @return array<int, array{
+     *     key: string,
+     *     entry_type: string,
+     *     activity_type: string|null,
+     *     title: string,
+     *     details: string,
+     *     owner: string|null,
+     *     occurred_at: string,
+     *     email: array{to_email: string|null, from_email: string|null, subject: string|null, body: string|null, attachment_name: string|null, email_type: string|null}|null,
+     *     metadata: array<int, array{label: string, value: string}>
+     * }>
      */
     private function timeline(Deal $deal): array
     {
+        $tenantId = (int) ($deal->tenant_id ?? 0);
+
         $items = [
             [
                 'key' => sprintf('deal-created-%d', $deal->id),
@@ -603,6 +627,11 @@ class DealController extends Controller
                 'details' => sprintf('Registo criado com etapa "%s".', $this->stageLabel($deal->stage)),
                 'owner' => $deal->owner?->name,
                 'occurred_at' => $deal->created_at?->format('d/m/Y H:i') ?? '-',
+                'email' => null,
+                'metadata' => [
+                    ['label' => 'Etapa', 'value' => $this->stageLabel($deal->stage)],
+                    ['label' => 'Valor', 'value' => number_format((float) $deal->value, 2, '.', '').' EUR'],
+                ],
                 'sort_at' => $deal->created_at?->getTimestamp() ?? 0,
             ],
         ];
@@ -616,6 +645,11 @@ class DealController extends Controller
                 'details' => 'Foram registadas alterações no negócio.',
                 'owner' => $deal->owner?->name,
                 'occurred_at' => $deal->updated_at->format('d/m/Y H:i'),
+                'email' => null,
+                'metadata' => [
+                    ['label' => 'Etapa atual', 'value' => $this->stageLabel($deal->stage)],
+                    ['label' => 'Probabilidade', 'value' => (string) ((int) $deal->probability).' %'],
+                ],
                 'sort_at' => $deal->updated_at->getTimestamp(),
             ];
         }
@@ -639,6 +673,12 @@ class DealController extends Controller
                     'details' => trim((string) ($event->description ?? '')) !== '' ? (string) $event->description : 'Sem descrição.',
                     'owner' => $event->owner?->name,
                     'occurred_at' => $timestamp?->format('d/m/Y H:i') ?? '-',
+                    'email' => null,
+                    'metadata' => [
+                        ['label' => 'Tipo', 'value' => $activityType !== null ? $activityType : 'atividade'],
+                        ['label' => 'Inicio', 'value' => $event->start_at?->format('d/m/Y H:i') ?? '-'],
+                        ['label' => 'Fim', 'value' => $event->end_at?->format('d/m/Y H:i') ?? '-'],
+                    ],
                     'sort_at' => $timestamp?->getTimestamp() ?? 0,
                 ];
             })
@@ -669,12 +709,53 @@ class DealController extends Controller
                     ),
                     'owner' => $emailLog->sender?->name,
                     'occurred_at' => $emailLog->sent_at?->format('d/m/Y H:i') ?? '-',
+                    'email' => [
+                        'to_email' => $emailLog->to_email,
+                        'from_email' => $emailLog->from_email,
+                        'subject' => $emailLog->subject,
+                        'body' => $emailLog->body,
+                        'attachment_name' => $emailLog->attachment_name,
+                        'email_type' => $emailLog->email_type,
+                    ],
+                    'metadata' => [
+                        ['label' => 'Tipo de email', 'value' => $emailLog->email_type],
+                        ['label' => 'Para', 'value' => $emailLog->to_email],
+                        ['label' => 'Data', 'value' => $emailLog->sent_at?->format('d/m/Y H:i') ?? '-'],
+                    ],
                     'sort_at' => $emailLog->sent_at?->getTimestamp() ?? 0,
                 ];
             })
             ->all();
 
-        $timeline = collect(array_merge($items, $activityItems, $emailItems))
+        $changeItems = ActivityLog::query()
+            ->where('tenant_id', $tenantId)
+            ->where('menu', 'Negocios')
+            ->whereIn('method', ['POST', 'PUT', 'PATCH', 'DELETE'])
+            ->where(function ($query) use ($deal): void {
+                $query->where('path', 'deals/'.$deal->id)
+                    ->orWhere('path', 'like', 'deals/'.$deal->id.'/%');
+            })
+            ->with('user:id,name')
+            ->orderByDesc('occurred_at')
+            ->limit(100)
+            ->get()
+            ->map(function (ActivityLog $log) use ($deal): array {
+                return [
+                    'key' => sprintf('change-%d', $log->id),
+                    'entry_type' => 'alteracao',
+                    'activity_type' => null,
+                    'title' => $this->timelineChangeTitle($log, (int) $deal->id),
+                    'details' => sprintf('%s %s', $log->method, $log->path),
+                    'owner' => $log->user?->name,
+                    'occurred_at' => $log->occurred_at?->format('d/m/Y H:i') ?? '-',
+                    'email' => null,
+                    'metadata' => $this->timelineChangeMetadata($log),
+                    'sort_at' => $log->occurred_at?->getTimestamp() ?? 0,
+                ];
+            })
+            ->all();
+
+        return collect(array_merge($items, $activityItems, $emailItems, $changeItems))
             ->sortByDesc('sort_at')
             ->values()
             ->map(function (array $item): array {
@@ -683,8 +764,66 @@ class DealController extends Controller
                 return $item;
             })
             ->all();
+    }
 
-        return $timeline;
+    /**
+     * @return array<int, array{label: string, value: string}>
+     */
+    private function timelineChangeMetadata(ActivityLog $log): array
+    {
+        return [
+            ['label' => 'Método', 'value' => $log->method],
+            ['label' => 'Ação', 'value' => (string) $log->action],
+            ['label' => 'Origem', 'value' => (string) ($log->device ?: 'sistema')],
+        ];
+    }
+
+    private function timelineChangeTitle(ActivityLog $log, int $dealId): string
+    {
+        $path = trim((string) $log->path);
+        $base = 'deals/'.$dealId;
+
+        if ($path === $base && in_array($log->method, ['PUT', 'PATCH'], true)) {
+            return 'Negócio atualizado';
+        }
+
+        if (str_contains($path, '/stage')) {
+            return 'Etapa alterada';
+        }
+
+        if (str_contains($path, '/quick-activity')) {
+            return 'Atividade criada';
+        }
+
+        if (str_contains($path, '/proposal/email')) {
+            return 'Proposta enviada por email';
+        }
+
+        if (str_contains($path, '/proposal')) {
+            return 'Proposta atualizada';
+        }
+
+        if (str_contains($path, '/products') && $log->method === 'DELETE') {
+            return 'Produto removido do negócio';
+        }
+
+        if (str_contains($path, '/products')) {
+            return 'Produto associado ao negócio';
+        }
+
+        if (str_contains($path, '/follow-up/cancel')) {
+            return 'Follow up cancelado';
+        }
+
+        if (str_contains($path, '/follow-up/resume')) {
+            return 'Follow up retomado';
+        }
+
+        if (str_contains($path, '/follow-up/customer-replied')) {
+            return 'Cliente respondeu';
+        }
+
+        return 'Alteração no negócio';
     }
 
     /**

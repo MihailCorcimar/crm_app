@@ -2,10 +2,12 @@
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { computed, ref, watch } from 'vue';
+import { CalendarDays, History, Mail, NotebookTabs } from 'lucide-vue-next';
+import { computed, onBeforeUnmount, onMounted, ref, type Component, watch } from 'vue';
 
 type DealShowPayload = {
     id: number;
@@ -65,6 +67,18 @@ type TimelineItem = {
     details: string;
     owner: string | null;
     occurred_at: string;
+    email: {
+        to_email: string | null;
+        from_email: string | null;
+        subject: string | null;
+        body: string | null;
+        attachment_name: string | null;
+        email_type: string | null;
+    } | null;
+    metadata: Array<{
+        label: string;
+        value: string;
+    }>;
 };
 
 const props = defineProps<{
@@ -130,6 +144,16 @@ const proposalInput = ref<HTMLInputElement | null>(null);
 const emailConfirmation = ref<string>('');
 const followUpFeedback = ref<string>('');
 const followUpError = ref<string>('');
+const quickActivityFeedback = ref<string>('');
+const quickActivityError = ref<string>('');
+const timelineItems = ref<TimelineItem[]>([...props.timeline]);
+const timelineFilter = ref<'all' | 'email' | 'activity' | 'note' | 'change'>('all');
+const selectedTimelineItem = ref<TimelineItem | null>(null);
+const timelineDialogOpen = ref<boolean>(false);
+const timelineRefreshing = ref<boolean>(false);
+const timelineRefreshError = ref<string>('');
+const timelineLastSyncAt = ref<string | null>(null);
+let timelinePolling: ReturnType<typeof setInterval> | null = null;
 
 const totalProductsValue = computed(() =>
     props.dealProducts.reduce((sum, line) => sum + line.total_value, 0),
@@ -148,6 +172,13 @@ watch(
         if (selected !== undefined) {
             productForm.unit_price = selected.default_price.toFixed(2);
         }
+    },
+);
+
+watch(
+    () => props.timeline,
+    (incoming) => {
+        timelineItems.value = [...incoming];
     },
 );
 
@@ -195,6 +226,109 @@ function activityLabel(type: string | null): string {
     return map[type] ?? type;
 }
 
+function entryTypeLabel(entryType: string): string {
+    const map: Record<string, string> = {
+        negocio: 'Negócio',
+        atividade: 'Atividade',
+        email: 'Email',
+        alteracao: 'Alteracao',
+    };
+
+    return map[entryType] ?? entryType;
+}
+
+function entryTypeClass(entryType: string): string {
+    const map: Record<string, string> = {
+        negocio: 'bg-zinc-100 text-zinc-700',
+        atividade: 'bg-blue-100 text-blue-700',
+        email: 'bg-emerald-100 text-emerald-700',
+        alteracao: 'bg-amber-100 text-amber-700',
+    };
+
+    return map[entryType] ?? 'bg-zinc-100 text-zinc-700';
+}
+
+function timelineItemIcon(item: TimelineItem): Component {
+    if (item.entry_type === 'email') {
+        return Mail;
+    }
+
+    if (item.entry_type === 'alteracao') {
+        return History;
+    }
+
+    if (item.entry_type === 'atividade' && item.activity_type === 'note') {
+        return NotebookTabs;
+    }
+
+    return CalendarDays;
+}
+
+function timelineMatchesFilter(item: TimelineItem): boolean {
+    if (timelineFilter.value === 'all') {
+        return true;
+    }
+
+    if (timelineFilter.value === 'email') {
+        return item.entry_type === 'email';
+    }
+
+    if (timelineFilter.value === 'activity') {
+        return item.entry_type === 'atividade';
+    }
+
+    if (timelineFilter.value === 'note') {
+        return item.entry_type === 'atividade' && item.activity_type === 'note';
+    }
+
+    if (timelineFilter.value === 'change') {
+        return item.entry_type === 'alteracao' || item.entry_type === 'negocio';
+    }
+
+    return true;
+}
+
+const filteredTimeline = computed(() =>
+    timelineItems.value.filter((item) => timelineMatchesFilter(item)),
+);
+
+function openTimelineDetails(item: TimelineItem): void {
+    selectedTimelineItem.value = item;
+    timelineDialogOpen.value = true;
+}
+
+async function refreshTimeline(): Promise<void> {
+    if (timelineRefreshing.value) {
+        return;
+    }
+
+    timelineRefreshing.value = true;
+    timelineRefreshError.value = '';
+
+    try {
+        const response = await fetch(`/deals/${props.deal.id}/timeline`, {
+            headers: {
+                Accept: 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const payload = await response.json() as { timeline?: TimelineItem[] };
+        timelineItems.value = Array.isArray(payload.timeline) ? payload.timeline : [];
+        timelineLastSyncAt.value = new Date().toLocaleTimeString('pt-PT');
+    } catch (error) {
+        console.error(error);
+        timelineRefreshError.value = 'Não foi possível atualizar a cronologia em tempo real.';
+    } finally {
+        timelineRefreshing.value = false;
+    }
+}
+
 function destroyDeal(): void {
     if (!window.confirm('Tens a certeza que queres eliminar este negócio?')) {
         return;
@@ -204,10 +338,19 @@ function destroyDeal(): void {
 }
 
 function submitQuickActivity(): void {
+    quickActivityFeedback.value = '';
+    quickActivityError.value = '';
+
     quickForm.post(`/deals/${props.deal.id}/quick-activity`, {
         preserveScroll: true,
+        preserveState: true,
         onSuccess: () => {
             quickForm.reset('title', 'description');
+            quickActivityFeedback.value = 'Atividade registada com sucesso.';
+            void refreshTimeline();
+        },
+        onError: () => {
+            quickActivityError.value = 'Não foi possível registar a atividade.';
         },
     });
 }
@@ -245,6 +388,7 @@ function sendProposalByEmail(): void {
         preserveScroll: true,
         onSuccess: () => {
             emailConfirmation.value = 'Proposta enviada por email com sucesso.';
+            void refreshTimeline();
         },
     });
 }
@@ -301,6 +445,7 @@ function addProductToDeal(): void {
             productForm.reset();
             productForm.quantity = '1';
             productForm.item_id = '';
+            void refreshTimeline();
         },
     });
 }
@@ -314,6 +459,18 @@ function removeProductFromDeal(lineId: number): void {
         preserveScroll: true,
     });
 }
+
+onMounted(() => {
+    timelinePolling = setInterval(() => {
+        void refreshTimeline();
+    }, 15000);
+});
+
+onBeforeUnmount(() => {
+    if (timelinePolling !== null) {
+        clearInterval(timelinePolling);
+    }
+});
 </script>
 
 <template>
@@ -588,6 +745,13 @@ function removeProductFromDeal(lineId: number): void {
                         <div class="md:col-span-2">
                             <Button type="submit" :disabled="quickForm.processing">Registar atividade</Button>
                         </div>
+
+                        <p v-if="quickActivityFeedback" class="md:col-span-2 text-sm text-emerald-600">
+                            {{ quickActivityFeedback }}
+                        </p>
+                        <p v-if="quickActivityError" class="md:col-span-2 text-destructive text-sm">
+                            {{ quickActivityError }}
+                        </p>
                     </form>
                 </CardContent>
             </Card>
@@ -649,32 +813,130 @@ function removeProductFromDeal(lineId: number): void {
                 <CardHeader>
                     <CardTitle>Cronologia</CardTitle>
                 </CardHeader>
-                <CardContent>
-                    <ul v-if="timeline.length > 0" class="space-y-3">
+                <CardContent class="space-y-4">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <Button size="sm" :variant="timelineFilter === 'all' ? 'default' : 'outline'" @click="timelineFilter = 'all'">
+                            Todos
+                        </Button>
+                        <Button size="sm" :variant="timelineFilter === 'email' ? 'default' : 'outline'" @click="timelineFilter = 'email'">
+                            Emails
+                        </Button>
+                        <Button size="sm" :variant="timelineFilter === 'activity' ? 'default' : 'outline'" @click="timelineFilter = 'activity'">
+                            Atividades
+                        </Button>
+                        <Button size="sm" :variant="timelineFilter === 'note' ? 'default' : 'outline'" @click="timelineFilter = 'note'">
+                            Notas
+                        </Button>
+                        <Button size="sm" :variant="timelineFilter === 'change' ? 'default' : 'outline'" @click="timelineFilter = 'change'">
+                            Alterações
+                        </Button>
+
+                        <div class="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+                            <span v-if="timelineLastSyncAt">Última atualização: {{ timelineLastSyncAt }}</span>
+                            <Button size="sm" variant="outline" :disabled="timelineRefreshing" @click="refreshTimeline">
+                                Atualizar
+                            </Button>
+                        </div>
+                    </div>
+
+                    <p v-if="timelineRefreshError" class="text-destructive text-sm">
+                        {{ timelineRefreshError }}
+                    </p>
+
+                    <ul v-if="filteredTimeline.length > 0" class="space-y-3">
                         <li
-                            v-for="item in timeline"
+                            v-for="item in filteredTimeline"
                             :key="item.key"
                             class="rounded-md border p-3"
                         >
                             <div class="flex items-start justify-between gap-3">
-                                <div>
-                                    <p class="text-sm font-medium">{{ item.title }}</p>
-                                    <p class="text-xs text-muted-foreground">
-                                        Tipo: {{ item.entry_type }}<span v-if="item.activity_type"> | {{ activityLabel(item.activity_type) }}</span>
-                                    </p>
+                                <div class="flex items-start gap-2">
+                                    <component :is="timelineItemIcon(item)" class="mt-0.5 h-4 w-4 text-muted-foreground" />
+                                    <div>
+                                        <p class="text-sm font-medium">{{ item.title }}</p>
+                                        <div class="mt-1 flex flex-wrap items-center gap-1">
+                                            <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium" :class="entryTypeClass(item.entry_type)">
+                                                {{ entryTypeLabel(item.entry_type) }}
+                                            </span>
+                                            <span
+                                                v-if="item.activity_type"
+                                                class="inline-flex rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700"
+                                            >
+                                                {{ activityLabel(item.activity_type) }}
+                                            </span>
+                                        </div>
+                                    </div>
                                 </div>
                                 <p class="text-xs text-muted-foreground">{{ item.occurred_at }}</p>
                             </div>
                             <p class="mt-2 text-sm text-muted-foreground">{{ item.details }}</p>
                             <p v-if="item.owner" class="mt-1 text-xs text-muted-foreground">Responsável: {{ item.owner }}</p>
+                            <div class="mt-2">
+                                <Button size="sm" variant="outline" @click="openTimelineDetails(item)">
+                                    Ver detalhe
+                                </Button>
+                            </div>
                         </li>
                     </ul>
-                    <p v-else class="text-sm text-muted-foreground">Sem registos na cronologia.</p>
+                    <p v-else class="text-sm text-muted-foreground">Sem registos na cronologia para este filtro.</p>
                 </CardContent>
             </Card>
+
+            <Dialog v-model:open="timelineDialogOpen">
+                <DialogContent class="sm:max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle>{{ selectedTimelineItem?.title || 'Detalhe da cronologia' }}</DialogTitle>
+                        <DialogDescription>{{ selectedTimelineItem?.occurred_at || '-' }}</DialogDescription>
+                    </DialogHeader>
+
+                    <div v-if="selectedTimelineItem" class="space-y-3 text-sm">
+                        <div class="flex flex-wrap gap-2">
+                            <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium" :class="entryTypeClass(selectedTimelineItem.entry_type)">
+                                {{ entryTypeLabel(selectedTimelineItem.entry_type) }}
+                            </span>
+                            <span
+                                v-if="selectedTimelineItem.activity_type"
+                                class="inline-flex rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700"
+                            >
+                                {{ activityLabel(selectedTimelineItem.activity_type) }}
+                            </span>
+                        </div>
+
+                        <div>
+                            <p class="text-xs font-medium text-muted-foreground">Resumo</p>
+                            <p>{{ selectedTimelineItem.details }}</p>
+                        </div>
+
+                        <div v-if="selectedTimelineItem.email" class="space-y-2 rounded-md border p-3">
+                            <p class="text-xs font-medium text-muted-foreground">Email</p>
+                            <p><span class="font-medium">De:</span> {{ selectedTimelineItem.email.from_email || '-' }}</p>
+                            <p><span class="font-medium">Para:</span> {{ selectedTimelineItem.email.to_email || '-' }}</p>
+                            <p><span class="font-medium">Assunto:</span> {{ selectedTimelineItem.email.subject || '-' }}</p>
+                            <p><span class="font-medium">Anexo:</span> {{ selectedTimelineItem.email.attachment_name || '-' }}</p>
+                            <div>
+                                <p class="font-medium">Corpo</p>
+                                <p class="whitespace-pre-wrap rounded-md bg-zinc-50 p-2">{{ selectedTimelineItem.email.body || '-' }}</p>
+                            </div>
+                        </div>
+
+                        <div v-if="selectedTimelineItem.metadata.length > 0" class="space-y-2 rounded-md border p-3">
+                            <p class="text-xs font-medium text-muted-foreground">Metadados</p>
+                            <ul class="space-y-1">
+                                <li v-for="meta in selectedTimelineItem.metadata" :key="`${meta.label}-${meta.value}`">
+                                    <span class="font-medium">{{ meta.label }}:</span> {{ meta.value }}
+                                </li>
+                            </ul>
+                        </div>
+
+                        <p v-if="selectedTimelineItem.owner" class="text-xs text-muted-foreground">Responsável: {{ selectedTimelineItem.owner }}</p>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     </AppLayout>
 </template>
+
+
 
 
 

@@ -91,6 +91,7 @@ Route::middleware(['auth'])->group(function (): void {
 
         Route::patch('deals/{deal}/stage', [DealController::class, 'updateStage'])->name('deals.stage.update');
         Route::post('deals/{deal}/quick-activity', [DealController::class, 'storeQuickActivity'])->name('deals.quick-activity.store');
+        Route::get('deals/{deal}/timeline', [DealController::class, 'timelineFeed'])->name('deals.timeline.feed');
         Route::post('deals/{deal}/products', [DealController::class, 'storeProduct'])->name('deals.products.store');
         Route::delete('deals/{deal}/products/{dealProduct}', [DealController::class, 'destroyProduct'])->name('deals.products.destroy');
         Route::post('deals/{deal}/proposal', [DealController::class, 'storeProposal'])->name('deals.proposal.store');
