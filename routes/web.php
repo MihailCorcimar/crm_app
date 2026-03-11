@@ -11,7 +11,9 @@ use App\Http\Controllers\DealController;
 use App\Http\Controllers\DealProductStatsController;
 use App\Http\Controllers\EntityController;
 use App\Http\Controllers\ItemController;
+use App\Http\Controllers\LeadFormController;
 use App\Http\Controllers\LogController;
+use App\Http\Controllers\PublicLeadFormController;
 use App\Http\Controllers\TenantBillingController;
 use App\Http\Controllers\TenantController;
 use App\Http\Controllers\TenantMemberController;
@@ -28,6 +30,13 @@ Route::get('/', function () {
 Route::get('dashboard', function () {
     return Inertia::render('Dashboard');
 })->middleware(['auth', 'verified'])->name('dashboard');
+
+Route::get('public/lead-forms/{token}', [PublicLeadFormController::class, 'show'])
+    ->name('public.lead-forms.show');
+Route::post('public/lead-forms/{token}', [PublicLeadFormController::class, 'submit'])
+    ->name('public.lead-forms.submit');
+Route::get('public/lead-forms/{token}/embed.js', [PublicLeadFormController::class, 'embedScript'])
+    ->name('public.lead-forms.embed-script');
 
 Route::middleware(['auth'])->group(function (): void {
     Route::get('tenants', [TenantController::class, 'index'])->name('tenants.index');
@@ -104,6 +113,10 @@ Route::middleware(['auth'])->group(function (): void {
         Route::get('deals/product-stats/export', [DealProductStatsController::class, 'exportCsv'])->name('deals.product-stats.export');
         Route::get('deals/product-stats/{item}', [DealProductStatsController::class, 'show'])->name('deals.product-stats.show');
         Route::resource('deals', DealController::class);
+        Route::resource('lead-forms', LeadFormController::class)
+            ->parameters(['lead-forms' => 'leadForm']);
+        Route::post('people/{contact}/merge', [ContactController::class, 'merge'])
+            ->name('people.merge');
         Route::resource('people', ContactController::class)
             ->parameters(['people' => 'contact'])
             ->names('people');

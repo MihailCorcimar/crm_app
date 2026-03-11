@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ContactRequest;
+use App\Http\Requests\ContactMergeRequest;
 use App\Models\Contact;
 use App\Models\ContactRole;
 use App\Models\Entity;
@@ -91,6 +92,7 @@ class ContactController extends Controller
                 'status' => $contact->status,
             ],
             'interaction_history' => $this->interactionHistory($contact),
+            'duplicate_candidates' => $this->duplicateCandidates($contact),
         ]);
     }
 
@@ -139,6 +141,32 @@ class ContactController extends Controller
         return to_route('people.index');
     }
 
+    public function merge(ContactMergeRequest $request, Contact $contact): RedirectResponse
+    {
+        $duplicateContactId = (int) $request->validated('duplicate_contact_id');
+        if ($duplicateContactId === (int) $contact->id) {
+            return back()->withErrors([
+                'duplicate_contact_id' => 'Seleciona outra pessoa para merge.',
+            ]);
+        }
+
+        $duplicateContact = Contact::query()
+            ->whereKey($duplicateContactId)
+            ->firstOrFail();
+
+        $this->authorize('update', $contact);
+        $this->authorize('update', $duplicateContact);
+
+        DB::transaction(function () use ($contact, $duplicateContact): void {
+            $contact->update($this->mergePayload($contact, $duplicateContact));
+
+            $this->reassignContactRelations($contact, $duplicateContact);
+            $duplicateContact->delete();
+        });
+
+        return to_route('people.show', $contact)->with('success', 'Duplicado unido com sucesso.');
+    }
+
     /**
      * @param  array<string, mixed>  $validated
      * @return array<string, mixed>
@@ -157,6 +185,122 @@ class ContactController extends Controller
             'notes' => $validated['notes'] ?? null,
             'status' => $validated['status'],
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function mergePayload(Contact $primaryContact, Contact $duplicateContact): array
+    {
+        $primaryNotes = trim((string) ($primaryContact->notes ?? ''));
+        $duplicateNotes = trim((string) ($duplicateContact->notes ?? ''));
+
+        $notes = $primaryNotes;
+        if ($duplicateNotes !== '') {
+            $notes = $primaryNotes === ''
+                ? $duplicateNotes
+                : $primaryNotes.PHP_EOL.PHP_EOL.'[Merge] '.now()->format('Y-m-d H:i').PHP_EOL.$duplicateNotes;
+        }
+
+        $status = $primaryContact->status;
+        if ($status !== 'active' && $duplicateContact->status === 'active') {
+            $status = 'active';
+        }
+
+        return [
+            'entity_id' => $primaryContact->entity_id ?? $duplicateContact->entity_id,
+            'first_name' => trim($primaryContact->first_name) !== '' ? $primaryContact->first_name : $duplicateContact->first_name,
+            'last_name' => $primaryContact->last_name ?: $duplicateContact->last_name,
+            'role_id' => $primaryContact->role_id ?: $duplicateContact->role_id,
+            'phone' => $primaryContact->phone ?: $duplicateContact->phone,
+            'mobile' => $primaryContact->mobile ?: $duplicateContact->mobile,
+            'email' => $primaryContact->email ?: $duplicateContact->email,
+            'gdpr_consent' => (bool) ($primaryContact->gdpr_consent || $duplicateContact->gdpr_consent),
+            'notes' => $notes !== '' ? $notes : null,
+            'status' => $status,
+        ];
+    }
+
+    private function reassignContactRelations(Contact $primaryContact, Contact $duplicateContact): void
+    {
+        if (Schema::hasTable('deals') && Schema::hasColumn('deals', 'person_id')) {
+            $query = DB::table('deals')
+                ->where('person_id', $duplicateContact->id);
+
+            if (Schema::hasColumn('deals', 'tenant_id')) {
+                $query->where('tenant_id', $primaryContact->tenant_id);
+            }
+
+            $query->update([
+                'person_id' => $primaryContact->id,
+                'updated_at' => now(),
+            ]);
+        }
+
+        if (Schema::hasTable('calendar_events')
+            && Schema::hasColumn('calendar_events', 'eventable_type')
+            && Schema::hasColumn('calendar_events', 'eventable_id')
+        ) {
+            $query = DB::table('calendar_events')
+                ->where('eventable_type', Contact::class)
+                ->where('eventable_id', $duplicateContact->id);
+
+            if (Schema::hasColumn('calendar_events', 'tenant_id')) {
+                $query->where('tenant_id', $primaryContact->tenant_id);
+            }
+
+            $query->update([
+                'eventable_id' => $primaryContact->id,
+                'updated_at' => now(),
+            ]);
+        }
+
+        if (Schema::hasTable('calendar_event_attendees')) {
+            $duplicateEventIds = DB::table('calendar_event_attendees as attendees')
+                ->join('calendar_events as events', 'events.id', '=', 'attendees.calendar_event_id')
+                ->where('attendees.attendee_type', Contact::class)
+                ->where('attendees.attendee_id', $duplicateContact->id)
+                ->where('events.tenant_id', $primaryContact->tenant_id)
+                ->pluck('attendees.calendar_event_id')
+                ->all();
+
+            if ($duplicateEventIds !== []) {
+                DB::table('calendar_event_attendees')
+                    ->where('attendee_type', Contact::class)
+                    ->where('attendee_id', $primaryContact->id)
+                    ->whereIn('calendar_event_id', $duplicateEventIds)
+                    ->delete();
+
+                DB::table('calendar_event_attendees')
+                    ->where('attendee_type', Contact::class)
+                    ->where('attendee_id', $duplicateContact->id)
+                    ->whereIn('calendar_event_id', $duplicateEventIds)
+                    ->update([
+                        'attendee_id' => $primaryContact->id,
+                        'updated_at' => now(),
+                    ]);
+            }
+        }
+
+        if (Schema::hasTable('lead_form_submissions') && Schema::hasColumn('lead_form_submissions', 'contact_id')) {
+            DB::table('lead_form_submissions')
+                ->where('tenant_id', $primaryContact->tenant_id)
+                ->where('contact_id', $duplicateContact->id)
+                ->update([
+                    'contact_id' => $primaryContact->id,
+                    'updated_at' => now(),
+                ]);
+        }
+
+        if (Schema::hasTable('ai_sales_suggestions') && Schema::hasColumn('ai_sales_suggestions', 'contact_id')) {
+            DB::table('ai_sales_suggestions')
+                ->where('tenant_id', $primaryContact->tenant_id)
+                ->where('contact_id', $duplicateContact->id)
+                ->update([
+                    'contact_id' => $primaryContact->id,
+                    'updated_at' => now(),
+                ]);
+        }
     }
 
     /**
@@ -186,6 +330,64 @@ class ContactController extends Controller
                 'id' => $role->id,
                 'name' => $role->name,
             ])
+            ->all();
+    }
+
+    /**
+     * @return array<int, array{id: int, full_name: string, email: string|null, mobile: string|null, entity: string|null, reason: string}>
+     */
+    private function duplicateCandidates(Contact $contact): array
+    {
+        $hasEmail = $contact->email !== null && trim($contact->email) !== '';
+        $hasMobile = $contact->mobile !== null && trim($contact->mobile) !== '';
+
+        if (! $hasEmail && ! $hasMobile) {
+            return [];
+        }
+
+        $query = Contact::query()
+            ->with(['entity:id,name'])
+            ->whereKeyNot($contact->id)
+            ->where(function ($query) use ($contact): void {
+                $hasCondition = false;
+
+                if ($contact->email !== null && trim($contact->email) !== '') {
+                    $hasCondition = true;
+                    $query->whereRaw('LOWER(email) = ?', [mb_strtolower(trim($contact->email))]);
+                }
+
+                if ($contact->mobile !== null && trim($contact->mobile) !== '') {
+                    if ($hasCondition) {
+                        $query->orWhere('mobile', trim($contact->mobile));
+                    } else {
+                        $query->where('mobile', trim($contact->mobile));
+                    }
+                }
+            })
+            ->latest()
+            ->limit(20)
+            ->get();
+
+        return $query
+            ->reject(fn (Contact $candidate): bool => (int) $candidate->id === (int) $contact->id)
+            ->map(function (Contact $candidate) use ($contact): array {
+                $reason = 'Dados de contacto iguais';
+                if ($contact->email !== null && $candidate->email !== null && mb_strtolower(trim($contact->email)) === mb_strtolower(trim($candidate->email))) {
+                    $reason = 'Email igual';
+                } elseif ($contact->mobile !== null && $candidate->mobile !== null && trim($contact->mobile) === trim($candidate->mobile)) {
+                    $reason = 'Telemovel igual';
+                }
+
+                return [
+                    'id' => $candidate->id,
+                    'full_name' => trim($candidate->first_name.' '.(string) $candidate->last_name),
+                    'email' => $candidate->email,
+                    'mobile' => $candidate->mobile,
+                    'entity' => $candidate->entity?->name,
+                    'reason' => $reason,
+                ];
+            })
+            ->values()
             ->all();
     }
 

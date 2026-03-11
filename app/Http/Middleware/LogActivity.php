@@ -78,6 +78,7 @@ class LogActivity
             'entities' => 'Entidades',
             'contacts', 'people' => 'Pessoas',
             'deals' => 'Negocios',
+            'lead-forms' => 'Leads Publicos',
             'calendar' => 'Calendario',
             'tenants' => 'Tenants',
             'access' => 'Gestao de Acessos',

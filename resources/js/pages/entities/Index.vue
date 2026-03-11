@@ -79,7 +79,18 @@ const columns: ColumnDef<EntityRow>[] = [
         accessorKey: 'status',
         header: 'Estado',
         cell: ({ row }: { row: { original: EntityRow } }) =>
-            row.original.status === 'active' ? 'Ativo' : 'Inativo',
+            h(
+                'span',
+                {
+                    class: [
+                        'inline-flex rounded-full px-2 py-1 text-xs font-medium',
+                        row.original.status === 'active'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-zinc-200 text-zinc-700',
+                    ],
+                },
+                row.original.status === 'active' ? 'Ativo' : 'Inativo',
+            ),
     },
 ];
 

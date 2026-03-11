@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -29,9 +30,19 @@ type InteractionHistoryItem = {
     occurred_at: string;
 };
 
+type DuplicateCandidate = {
+    id: number;
+    full_name: string;
+    email: string | null;
+    mobile: string | null;
+    entity: string | null;
+    reason: string;
+};
+
 const props = defineProps<{
     contact: ContactShowPayload;
     interaction_history: InteractionHistoryItem[];
+    duplicate_candidates: DuplicateCandidate[];
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -48,6 +59,29 @@ function destroyContact(): void {
     }
 
     router.delete(`/people/${props.contact.id}`);
+}
+
+const selectedDuplicateId = ref<string>('');
+const duplicateCandidates = computed(() =>
+    props.duplicate_candidates.filter((candidate) => candidate.id !== props.contact.id),
+);
+
+function mergeDuplicate(): void {
+    if (selectedDuplicateId.value === '') {
+        return;
+    }
+
+    if (Number(selectedDuplicateId.value) === props.contact.id) {
+        return;
+    }
+
+    if (!window.confirm('Confirmas o merge deste duplicado nesta pessoa principal?')) {
+        return;
+    }
+
+    router.post(`/people/${props.contact.id}/merge`, {
+        duplicate_contact_id: Number(selectedDuplicateId.value),
+    });
 }
 </script>
 
@@ -85,6 +119,47 @@ function destroyContact(): void {
                         <div><dt class="text-sm text-muted-foreground">Consentimento RGPD</dt><dd>{{ contact.gdpr_consent ? 'Sim' : 'Nao' }}</dd></div>
                         <div><dt class="text-sm text-muted-foreground">Observacoes</dt><dd>{{ contact.notes || '-' }}</dd></div>
                     </dl>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Merge de duplicados</CardTitle>
+                </CardHeader>
+                <CardContent class="space-y-3">
+                    <p class="text-sm text-muted-foreground">
+                        Junta registos duplicados nesta pessoa principal, mantendo historico e ligacoes.
+                    </p>
+
+                    <div v-if="duplicateCandidates.length === 0" class="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                        Nao foram encontrados duplicados sugeridos para esta pessoa.
+                    </div>
+
+                    <div v-else class="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+                        <div class="grid gap-1">
+                            <label class="text-sm font-medium">Selecionar duplicado</label>
+                            <select
+                                v-model="selectedDuplicateId"
+                                class="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none"
+                            >
+                                <option value="">Selecionar pessoa duplicada</option>
+                                <option
+                                    v-for="candidate in duplicateCandidates"
+                                    :key="candidate.id"
+                                    :value="String(candidate.id)"
+                                >
+                                    #{{ candidate.id }} - {{ candidate.full_name }} | {{ candidate.reason }} | {{ candidate.email || candidate.mobile || '-' }}
+                                </option>
+                            </select>
+                        </div>
+                        <Button
+                            type="button"
+                            :disabled="selectedDuplicateId === ''"
+                            @click="mergeDuplicate"
+                        >
+                            Unir duplicado
+                        </Button>
+                    </div>
                 </CardContent>
             </Card>
 
