@@ -6,11 +6,13 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/vue3';
 
 type FieldSchemaRow = {
-    key: 'full_name' | 'email' | 'phone' | 'company' | 'message';
+    key: string;
     label: string;
-    type: 'text' | 'email' | 'tel' | 'textarea';
+    type: 'text' | 'email' | 'tel' | 'textarea' | 'number' | 'date' | 'select' | 'checkbox';
     enabled: boolean;
     required: boolean;
+    is_system?: boolean;
+    options?: string[];
 };
 
 const props = defineProps<{
@@ -25,8 +27,8 @@ const props = defineProps<{
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Formularios publicos', href: '/lead-forms' },
-    { title: 'Criar formulario', href: '/lead-forms/create' },
+    { title: 'Formulários publicos', href: '/lead-forms' },
+    { title: 'Criar formulário', href: '/lead-forms/create' },
 ];
 
 const form = useForm({
@@ -44,18 +46,18 @@ function submit(): void {
 </script>
 
 <template>
-    <Head title="Criar formulario publico" />
+    <Head title="Criar formulário publico" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
             <Card>
                 <CardHeader>
-                    <CardTitle>Novo formulario publico</CardTitle>
+                    <CardTitle>Novo formulário publico</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <LeadFormForm
                         :form="form"
-                        submit-label="Guardar formulario"
+                        submit-label="Guardar formulário"
                         @submit="submit"
                     />
                 </CardContent>
@@ -63,4 +65,3 @@ function submit(): void {
         </div>
     </AppLayout>
 </template>
-

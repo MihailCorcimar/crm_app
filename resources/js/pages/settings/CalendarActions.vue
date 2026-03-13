@@ -24,7 +24,7 @@ const props = defineProps<{
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Configuracoes - Calendario - Acoes', href: '/settings/calendar/actions' },
+    { title: 'Configurações - Calendário - Ações', href: '/settings/calendar/actions' },
 ];
 
 const createForm = useForm({
@@ -90,7 +90,7 @@ const columns: ColumnDef<CalendarActionRow>[] = [
     { accessorKey: 'status', header: 'Estado', cell: ({ row }: { row: { original: CalendarActionRow } }) => (row.original.status === 'active' ? 'Ativo' : 'Inativo') },
     {
         id: 'actions',
-        header: 'Acoes',
+        header: 'Ações',
         cell: ({ row }: { row: { original: CalendarActionRow } }) =>
             h('div', { class: 'flex gap-2' }, [
                 h(
@@ -119,13 +119,13 @@ const columns: ColumnDef<CalendarActionRow>[] = [
 
 <template>
     <AppLayout :breadcrumbs="breadcrumbs">
-        <Head title="Configuracoes - Calendario - Acoes" />
+        <Head title="Configurações - Calendário - Ações" />
 
         <SettingsLayout :show-system-nav="false">
             <div class="space-y-6">
                 <Heading
                     variant="small"
-                    title="Configuracoes - Calendario - Acoes"
+                    title="Configurações - Calendário - Ações"
                     description="Gerir as acoes utilizadas no calendario."
                 />
 
@@ -188,7 +188,7 @@ const columns: ColumnDef<CalendarActionRow>[] = [
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Acoes</CardTitle>
+                        <CardTitle>Ações</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <DataTable :columns="columns" :data="calendarActions" empty-text="Sem acoes configuradas." />

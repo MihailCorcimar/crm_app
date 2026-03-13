@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -54,20 +54,56 @@ const props = defineProps<{
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Formularios publicos', href: '/lead-forms' },
+    { title: 'Formulários públicos', href: '/lead-forms' },
     { title: props.leadForm.name, href: `/lead-forms/${props.leadForm.id}` },
 ];
 
-const copied = ref<'iframe' | 'script' | null>(null);
+type CopyKind = 'iframe' | 'script';
+type CopyState = 'idle' | 'copied' | 'error';
 
-async function copySnippet(kind: 'iframe' | 'script'): Promise<void> {
+const copyStatus = ref<Record<CopyKind, CopyState>>({
+    iframe: 'idle',
+    script: 'idle',
+});
+
+function fallbackCopy(text: string): boolean {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    const copied = document.execCommand('copy');
+    document.body.removeChild(textarea);
+
+    return copied;
+}
+
+function setCopyStatus(kind: CopyKind, state: CopyState): void {
+    copyStatus.value[kind] = state;
+    window.setTimeout(() => {
+        copyStatus.value[kind] = 'idle';
+    }, 1600);
+}
+
+async function copySnippet(kind: CopyKind): Promise<void> {
     const text = kind === 'iframe' ? props.leadForm.embed_iframe_code : props.leadForm.embed_script_code;
 
-    await navigator.clipboard.writeText(text);
-    copied.value = kind;
-    window.setTimeout(() => {
-        copied.value = null;
-    }, 1500);
+    try {
+        if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(text);
+            setCopyStatus(kind, 'copied');
+
+            return;
+        }
+    } catch {
+        // Fallback para contexto não seguro (HTTP).
+    }
+
+    const copied = fallbackCopy(text);
+    setCopyStatus(kind, copied ? 'copied' : 'error');
 }
 
 function prettyPayload(payload: Record<string, string | null>): string {
@@ -79,7 +115,7 @@ function prettyPayload(payload: Record<string, string | null>): string {
 </script>
 
 <template>
-    <Head :title="`Formulario - ${leadForm.name}`" />
+    <Head :title="`Formulário - ${leadForm.name}`" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
@@ -91,7 +127,7 @@ function prettyPayload(payload: Record<string, string | null>): string {
                             <Link :href="`/lead-forms/${leadForm.id}/edit`">Editar</Link>
                         </Button>
                         <Button as-child variant="outline">
-                            <a :href="leadForm.public_url" target="_blank" rel="noopener noreferrer">Abrir publico</a>
+                            <a :href="leadForm.public_url" target="_blank" rel="noopener noreferrer">Abrir público</a>
                         </Button>
                     </div>
                 </CardHeader>
@@ -102,8 +138,8 @@ function prettyPayload(payload: Record<string, string | null>): string {
                             <div class="font-medium">{{ leadForm.status === 'active' ? 'Ativo' : 'Inativo' }}</div>
                         </div>
                         <div class="rounded-md border p-3">
-                            <div class="text-sm text-muted-foreground">Captcha obrigatorio</div>
-                            <div class="font-medium">{{ leadForm.requires_captcha ? 'Sim' : 'Nao' }}</div>
+                            <div class="text-sm text-muted-foreground">Captcha obrigatório</div>
+                            <div class="font-medium">{{ leadForm.requires_captcha ? 'Sim' : 'Não' }}</div>
                         </div>
                     </div>
 
@@ -121,7 +157,7 @@ function prettyPayload(payload: Record<string, string | null>): string {
                     </div>
 
                     <div class="rounded-md border p-3">
-                        <p class="text-sm font-medium">Mensagem de confirmacao</p>
+                        <p class="text-sm font-medium">Mensagem de confirmação</p>
                         <p class="mt-1 text-sm text-muted-foreground">{{ leadForm.confirmation_message }}</p>
                     </div>
                 </CardContent>
@@ -129,16 +165,34 @@ function prettyPayload(payload: Record<string, string | null>): string {
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Codigo de incorporacao</CardTitle>
+                    <CardTitle>Código de incorporação</CardTitle>
                 </CardHeader>
                 <CardContent class="space-y-4">
                     <div class="space-y-2">
                         <div class="flex items-center justify-between">
                             <p class="text-sm font-medium">iframe</p>
-                            <Button size="sm" variant="outline" @click="copySnippet('iframe')">
-                                {{ copied === 'iframe' ? 'Copiado' : 'Copiar' }}
+                            <Button
+                                size="sm"
+                                :variant="copyStatus.iframe === 'copied' ? 'default' : 'outline'"
+                                :class="copyStatus.iframe === 'error' ? 'border-red-500 text-red-600' : ''"
+                                @click="copySnippet('iframe')"
+                            >
+                                {{
+                                    copyStatus.iframe === 'copied'
+                                        ? 'Copiado'
+                                        : copyStatus.iframe === 'error'
+                                            ? 'Falhou'
+                                            : 'Copiar'
+                                }}
                             </Button>
                         </div>
+                        <p
+                            v-if="copyStatus.iframe !== 'idle'"
+                            class="text-xs"
+                            :class="copyStatus.iframe === 'copied' ? 'text-emerald-600' : 'text-red-600'"
+                        >
+                            {{ copyStatus.iframe === 'copied' ? 'Código copiado para a área de transferência.' : 'Não foi possível copiar automaticamente.' }}
+                        </p>
                         <textarea
                             readonly
                             rows="3"
@@ -150,10 +204,28 @@ function prettyPayload(payload: Record<string, string | null>): string {
                     <div class="space-y-2">
                         <div class="flex items-center justify-between">
                             <p class="text-sm font-medium">script</p>
-                            <Button size="sm" variant="outline" @click="copySnippet('script')">
-                                {{ copied === 'script' ? 'Copiado' : 'Copiar' }}
+                            <Button
+                                size="sm"
+                                :variant="copyStatus.script === 'copied' ? 'default' : 'outline'"
+                                :class="copyStatus.script === 'error' ? 'border-red-500 text-red-600' : ''"
+                                @click="copySnippet('script')"
+                            >
+                                {{
+                                    copyStatus.script === 'copied'
+                                        ? 'Copiado'
+                                        : copyStatus.script === 'error'
+                                            ? 'Falhou'
+                                            : 'Copiar'
+                                }}
                             </Button>
                         </div>
+                        <p
+                            v-if="copyStatus.script !== 'idle'"
+                            class="text-xs"
+                            :class="copyStatus.script === 'copied' ? 'text-emerald-600' : 'text-red-600'"
+                        >
+                            {{ copyStatus.script === 'copied' ? 'Código copiado para a área de transferência.' : 'Não foi possível copiar automaticamente.' }}
+                        </p>
                         <textarea
                             readonly
                             rows="4"
@@ -166,11 +238,11 @@ function prettyPayload(payload: Record<string, string | null>): string {
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Submissoes</CardTitle>
+                    <CardTitle>Submissões</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <div v-if="submissions.data.length === 0" class="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-                        Sem submissoes ainda.
+                        Sem submissões ainda.
                     </div>
 
                     <template v-else>
@@ -236,4 +308,3 @@ function prettyPayload(payload: Record<string, string | null>): string {
         </div>
     </AppLayout>
 </template>
-

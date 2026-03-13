@@ -93,14 +93,14 @@ const numberDisplay = computed(() =>
 
             <FormField name="role_id">
                 <FormItem>
-                    <FormLabel>Funcao</FormLabel>
+                    <FormLabel>Função</FormLabel>
                     <FormControl>
                         <select
                             v-model="form.role_id"
                             class="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                             required
                         >
-                            <option :value="''" disabled>Selecionar funcao</option>
+                            <option :value="''" disabled>Selecionar função</option>
                             <option v-for="role in roles" :key="role.id" :value="role.id">
                                 {{ role.name }}
                             </option>
@@ -181,7 +181,7 @@ const numberDisplay = computed(() =>
 
         <FormField name="notes">
             <FormItem>
-                <FormLabel>Observacoes</FormLabel>
+                <FormLabel>Observações</FormLabel>
                 <FormControl>
                     <textarea
                         v-model="form.notes"

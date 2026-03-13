@@ -34,7 +34,7 @@ const emit = defineEmits<{
                 <FormItem>
                     <FormLabel>Nome da regra</FormLabel>
                     <FormControl>
-                        <Input v-model="form.name" placeholder="Ex.: Negocios sem atividade" required />
+                        <Input v-model="form.name" placeholder="Ex.: Negócios sem atividade" required />
                     </FormControl>
                     <FormMessage>{{ form.errors.name }}</FormMessage>
                 </FormItem>

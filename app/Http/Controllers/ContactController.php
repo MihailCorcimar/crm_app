@@ -8,6 +8,7 @@ use App\Models\Contact;
 use App\Models\ContactRole;
 use App\Models\Entity;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -24,11 +25,27 @@ class ContactController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index(): Response
+    public function index(Request $request): Response
     {
+        $name = trim($request->string('name')->toString());
+        $email = trim($request->string('email')->toString());
+        $createdAtOrder = strtolower(trim($request->string('created_at_order')->toString()));
+        if (! in_array($createdAtOrder, ['asc', 'desc'], true)) {
+            $createdAtOrder = 'desc';
+        }
+
         $contacts = Contact::query()
             ->with(['entity:id,name', 'role:id,name'])
-            ->latest()
+            ->when($name !== '', function ($query) use ($name): void {
+                $query->where(function ($innerQuery) use ($name): void {
+                    $innerQuery
+                        ->where('first_name', 'like', "%{$name}%")
+                        ->orWhere('last_name', 'like', "%{$name}%")
+                        ->orWhereRaw("CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, '')) like ?", ["%{$name}%"]);
+                });
+            })
+            ->when($email !== '', fn ($query) => $query->where('email', 'like', "%{$email}%"))
+            ->orderBy('created_at', $createdAtOrder)
             ->paginate(10)
             ->withQueryString()
             ->through(fn (Contact $contact): array => [
@@ -40,10 +57,16 @@ class ContactController extends Controller
                 'phone' => $contact->phone,
                 'mobile' => $contact->mobile,
                 'email' => $contact->email,
+                'created_at' => $contact->created_at?->format('d/m/Y H:i'),
             ]);
 
         return Inertia::render('contacts/Index', [
             'contacts' => $contacts,
+            'filters' => [
+                'name' => $name,
+                'email' => $email,
+                'created_at_order' => $createdAtOrder,
+            ],
         ]);
     }
 

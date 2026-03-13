@@ -6,20 +6,14 @@ use App\Models\Contact;
 use App\Models\ContactRole;
 use App\Models\LeadForm;
 use App\Models\LeadFormSubmission;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class LeadCaptureService
 {
     /**
-     * @param  array{
-     *   full_name?: string|null,
-     *   email?: string|null,
-     *   phone?: string|null,
-     *   company?: string|null,
-     *   message?: string|null
-     * }  $payload
+     * @param  array<string, mixed>  $payload
      */
     public function capture(
         LeadForm $leadForm,
@@ -33,12 +27,14 @@ class LeadCaptureService
         return DB::transaction(function () use ($leadForm, $payload, $sourceType, $sourceUrl, $sourceOrigin, $ipAddress, $userAgent): LeadFormSubmission {
             $tenantId = (int) $leadForm->tenant_id;
             $roleId = $this->ensureLeadRole($tenantId);
+            $payload = $this->normalizePayload($payload);
 
             [$firstName, $lastName] = $this->splitFullName((string) ($payload['full_name'] ?? ''));
             $email = $this->cleanNullableString($payload['email'] ?? null);
             $phone = $this->cleanNullableString($payload['phone'] ?? null);
             $company = $this->cleanNullableString($payload['company'] ?? null);
             $message = $this->cleanNullableString($payload['message'] ?? null);
+            $customFieldsSummary = $this->summarizeCustomFields($payload);
 
             $existingContact = null;
 
@@ -52,7 +48,7 @@ class LeadCaptureService
             if ($existingContact !== null) {
                 $existingContact->update([
                     'mobile' => $existingContact->mobile ?: $phone,
-                    'notes' => $this->appendNote((string) $existingContact->notes, $leadForm, $sourceType, $sourceOrigin, $company, $message),
+                    'notes' => $this->appendNote((string) $existingContact->notes, $leadForm, $sourceType, $sourceOrigin, $company, $message, $customFieldsSummary),
                 ]);
 
                 $contact = $existingContact->fresh();
@@ -68,7 +64,7 @@ class LeadCaptureService
                     'mobile' => $phone,
                     'email' => $email,
                     'gdpr_consent' => false,
-                    'notes' => $this->appendNote('', $leadForm, $sourceType, $sourceOrigin, $company, $message),
+                    'notes' => $this->appendNote('', $leadForm, $sourceType, $sourceOrigin, $company, $message, $customFieldsSummary),
                     'status' => 'active',
                 ]);
             }
@@ -83,7 +79,7 @@ class LeadCaptureService
                 'ip_address' => $ipAddress,
                 'user_agent' => $userAgent !== null ? mb_substr($userAgent, 0, 512) : null,
                 'captcha_passed' => true,
-                'payload' => Arr::only($payload, ['full_name', 'email', 'phone', 'company', 'message']),
+                'payload' => $payload,
                 'submitted_at' => Carbon::now(),
             ]);
         });
@@ -135,7 +131,8 @@ class LeadCaptureService
         string $sourceType,
         ?string $sourceOrigin,
         ?string $company,
-        ?string $message
+        ?string $message,
+        string $customFieldsSummary
     ): string {
         $lines = [];
 
@@ -159,6 +156,10 @@ class LeadCaptureService
             $lines[] = 'Message: '.$message;
         }
 
+        if ($customFieldsSummary !== '') {
+            $lines[] = 'Custom fields: '.$customFieldsSummary;
+        }
+
         return implode(PHP_EOL, $lines);
     }
 
@@ -168,5 +169,51 @@ class LeadCaptureService
 
         return $stringValue === '' ? null : $stringValue;
     }
-}
 
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function normalizePayload(array $payload): array
+    {
+        return collect($payload)
+            ->map(function (mixed $value): mixed {
+                if (is_bool($value) || is_int($value) || is_float($value)) {
+                    return $value;
+                }
+
+                if ($value === null) {
+                    return null;
+                }
+
+                $text = trim((string) $value);
+
+                return $text === '' ? null : mb_substr($text, 0, 4000);
+            })
+            ->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function summarizeCustomFields(array $payload): string
+    {
+        /** @var Collection<string, mixed> $custom */
+        $custom = collect($payload)->except(['full_name', 'email', 'phone', 'company', 'message']);
+
+        return $custom
+            ->filter(fn (mixed $value): bool => $value !== null && $value !== '')
+            ->map(function (mixed $value, string $key): string {
+                $label = str_replace('_', ' ', $key);
+                $label = ucfirst(trim($label));
+
+                if (is_bool($value)) {
+                    return $label.': '.($value ? 'yes' : 'no');
+                }
+
+                return $label.': '.(string) $value;
+            })
+            ->values()
+            ->implode(' | ');
+    }
+}

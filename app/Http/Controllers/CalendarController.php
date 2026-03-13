@@ -61,6 +61,9 @@ class CalendarController extends Controller
                     'action' => $calendarEvent->action?->name,
                     'eventable' => $this->eventableLabel($calendarEvent),
                     'attendees_count' => $calendarEvent->attendees->count(),
+                    'entity_attendees' => $this->attendeeLabels($calendarEvent, Entity::class),
+                    'person_attendees' => $this->attendeeLabels($calendarEvent, Contact::class),
+                    'deal_attendees' => $this->attendeeLabels($calendarEvent, Deal::class),
                     'status' => $calendarEvent->status,
                 ],
             ])
@@ -224,6 +227,35 @@ class CalendarController extends Controller
         }
 
         return '-';
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function attendeeLabels(CalendarEvent $calendarEvent, string $attendeeType): array
+    {
+        return $calendarEvent->attendees
+            ->where('attendee_type', $attendeeType)
+            ->map(function ($attendee): string {
+                $model = $attendee->attendee;
+
+                if ($model instanceof Entity) {
+                    return (string) $model->name;
+                }
+
+                if ($model instanceof Contact) {
+                    return trim($model->first_name.' '.($model->last_name ?? ''));
+                }
+
+                if ($model instanceof Deal) {
+                    return (string) $model->title;
+                }
+
+                return '';
+            })
+            ->filter(fn (string $label): bool => trim($label) !== '')
+            ->values()
+            ->all();
     }
 
     /**

@@ -51,7 +51,7 @@ const columns: ColumnDef<PermissionGroupRow>[] = [
     { accessorKey: 'status', header: 'Estado', cell: ({ row }: { row: { original: PermissionGroupRow } }) => (row.original.status === 'active' ? 'Ativo' : 'Inativo') },
     {
         id: 'actions',
-        header: 'Acoes',
+        header: 'Ações',
         cell: ({ row }: { row: { original: PermissionGroupRow } }) =>
             h('div', { class: 'flex gap-2' }, [
                 h(

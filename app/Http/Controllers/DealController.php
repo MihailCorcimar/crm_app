@@ -729,7 +729,7 @@ class DealController extends Controller
 
         $changeItems = ActivityLog::query()
             ->where('tenant_id', $tenantId)
-            ->where('menu', 'Negocios')
+            ->where('menu', 'Negócios')
             ->whereIn('method', ['POST', 'PUT', 'PATCH', 'DELETE'])
             ->where(function ($query) use ($deal): void {
                 $query->where('path', 'deals/'.$deal->id)

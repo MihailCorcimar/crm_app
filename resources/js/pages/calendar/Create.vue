@@ -32,7 +32,7 @@ const props = defineProps<{
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Calendario', href: '/calendar' },
+    { title: 'Calendário', href: '/calendar' },
     { title: 'Agendar atividade', href: '/calendar/create' },
 ];
 

@@ -6,11 +6,13 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/vue3';
 
 type FieldSchemaRow = {
-    key: 'full_name' | 'email' | 'phone' | 'company' | 'message';
+    key: string;
     label: string;
-    type: 'text' | 'email' | 'tel' | 'textarea';
+    type: 'text' | 'email' | 'tel' | 'textarea' | 'number' | 'date' | 'select' | 'checkbox';
     enabled: boolean;
     required: boolean;
+    is_system?: boolean;
+    options?: string[];
 };
 
 const props = defineProps<{
@@ -26,8 +28,8 @@ const props = defineProps<{
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Formularios publicos', href: '/lead-forms' },
-    { title: 'Editar formulario', href: `/lead-forms/${props.leadForm.id}/edit` },
+    { title: 'Formulários publicos', href: '/lead-forms' },
+    { title: 'Editar formulário', href: `/lead-forms/${props.leadForm.id}/edit` },
 ];
 
 const form = useForm({
@@ -45,13 +47,13 @@ function submit(): void {
 </script>
 
 <template>
-    <Head title="Editar formulario publico" />
+    <Head title="Editar formulário publico" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
             <Card>
                 <CardHeader>
-                    <CardTitle>Editar formulario publico</CardTitle>
+                    <CardTitle>Editar formulário publico</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <LeadFormForm
@@ -64,4 +66,3 @@ function submit(): void {
         </div>
     </AppLayout>
 </template>
-

@@ -182,7 +182,7 @@ class DealAutomationEngineService
             'tenant_id' => $deal->tenant_id,
             'occurred_at' => now(),
             'user_id' => $ownerId,
-            'menu' => 'Automacoes',
+            'menu' => 'Automações',
             'action' => 'Alerta automacao',
             'device' => 'system',
             'ip_address' => '127.0.0.1',

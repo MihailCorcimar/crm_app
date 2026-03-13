@@ -8,9 +8,11 @@ use App\Support\LeadFormFieldCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Throwable;
 
 class PublicLeadFormController extends Controller
 {
@@ -27,13 +29,19 @@ class PublicLeadFormController extends Controller
         $enabledFields = $this->fieldCatalog->enabledFields($normalizedSchema);
 
         $mode = $this->resolveSourceType($request->query('mode'));
-        $captcha = $leadForm->requires_captcha ? $this->getOrCreateCaptcha($request, $token) : null;
+        $useTurnstile = $leadForm->requires_captcha && $this->turnstileEnabled();
+        $captcha = null;
+        if ($leadForm->requires_captcha && ! $useTurnstile) {
+            $captcha = $this->getOrCreateCaptcha($request, $token);
+        }
 
         return response()->view('public.lead-form', [
             'leadForm' => $leadForm,
             'enabledFields' => $enabledFields,
             'mode' => $mode,
             'captcha' => $captcha,
+            'useTurnstile' => $useTurnstile,
+            'turnstileSiteKey' => $useTurnstile ? $this->turnstileSiteKey() : null,
             'successMessage' => session('lead_form_success'),
         ]);
     }
@@ -46,6 +54,7 @@ class PublicLeadFormController extends Controller
         $leadForm = $this->resolveActiveForm($token);
         $normalizedSchema = $this->fieldCatalog->normalize((array) $leadForm->field_schema);
         $dynamicRules = $this->fieldCatalog->submissionRules($normalizedSchema);
+        $useTurnstile = $leadForm->requires_captcha && $this->turnstileEnabled();
 
         $rules = array_merge($dynamicRules, [
             'website' => ['nullable', 'max:0'],
@@ -54,15 +63,27 @@ class PublicLeadFormController extends Controller
         ]);
 
         if ($leadForm->requires_captcha) {
-            $rules['captcha_answer'] = ['required', 'integer'];
+            if ($useTurnstile) {
+                $rules['cf-turnstile-response'] = ['required', 'string', 'max:4096'];
+            } else {
+                $rules['captcha_answer'] = ['required', 'integer'];
+            }
         }
 
         $validated = Validator::make($request->all(), $rules)->validate();
 
-        if ($leadForm->requires_captcha && ! $this->validateCaptcha($request, $token, (int) $validated['captcha_answer'])) {
-            throw ValidationException::withMessages([
-                'captcha_answer' => 'Resposta de captcha invalida. Tente novamente.',
-            ]);
+        if ($leadForm->requires_captcha) {
+            if ($useTurnstile) {
+                if (! $this->validateTurnstileToken($request, (string) ($validated['cf-turnstile-response'] ?? ''))) {
+                    throw ValidationException::withMessages([
+                        'cf-turnstile-response' => 'Validacao de captcha falhou. Tente novamente.',
+                    ]);
+                }
+            } elseif (! $this->validateCaptcha($request, $token, (int) $validated['captcha_answer'])) {
+                throw ValidationException::withMessages([
+                    'captcha_answer' => 'Resposta de captcha invalida. Tente novamente.',
+                ]);
+            }
         }
 
         $sourceType = $this->resolveSourceType($validated['source_type'] ?? $request->query('mode'));
@@ -78,13 +99,7 @@ class PublicLeadFormController extends Controller
 
         $this->leadCaptureService->capture(
             $leadForm,
-            [
-                'full_name' => $validated['full_name'] ?? null,
-                'email' => $validated['email'] ?? null,
-                'phone' => $validated['phone'] ?? null,
-                'company' => $validated['company'] ?? null,
-                'message' => $validated['message'] ?? null,
-            ],
+            $this->submissionPayload($normalizedSchema, $validated),
             $sourceType,
             $sourceUrl,
             $sourceOrigin,
@@ -92,7 +107,9 @@ class PublicLeadFormController extends Controller
             $request->userAgent()
         );
 
-        $request->session()->forget($this->captchaSessionKey($token));
+        if (! $useTurnstile) {
+            $request->session()->forget($this->captchaSessionKey($token));
+        }
 
         return redirect()
             ->route('public.lead-forms.show', [
@@ -135,7 +152,7 @@ class PublicLeadFormController extends Controller
         iframe.height = '680';
         iframe.loading = 'lazy';
         iframe.style.border = '0';
-        iframe.setAttribute('title', 'Formulario de lead');
+        iframe.setAttribute('title', 'Formulário de lead');
 
         target.appendChild(iframe);
         target.setAttribute('data-crm-lead-form-loaded', '1');
@@ -222,6 +239,54 @@ JS;
         return 'lead_form_captcha.'.$token;
     }
 
+    private function turnstileEnabled(): bool
+    {
+        return $this->turnstileSiteKey() !== null
+            && $this->turnstileSecretKey() !== null;
+    }
+
+    private function turnstileSiteKey(): ?string
+    {
+        $key = trim((string) config('services.turnstile.site_key', ''));
+
+        return $key === '' ? null : $key;
+    }
+
+    private function turnstileSecretKey(): ?string
+    {
+        $key = trim((string) config('services.turnstile.secret_key', ''));
+
+        return $key === '' ? null : $key;
+    }
+
+    private function validateTurnstileToken(Request $request, string $token): bool
+    {
+        $secret = $this->turnstileSecretKey();
+        if ($secret === null || trim($token) === '') {
+            return false;
+        }
+
+        try {
+            $response = Http::asForm()
+                ->timeout(10)
+                ->post('https://challenges.cloudflare.com/turnstile/v0/siteverify', [
+                    'secret' => $secret,
+                    'response' => $token,
+                    'remoteip' => $request->ip(),
+                ]);
+
+            if (! $response->ok()) {
+                return false;
+            }
+
+            $payload = $response->json();
+
+            return is_array($payload) && (bool) ($payload['success'] ?? false);
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
     private function resolveSourceType(mixed $value): string
     {
         $normalized = trim((string) $value);
@@ -255,5 +320,38 @@ JS;
         $text = trim((string) $value);
 
         return $text === '' ? null : $text;
+    }
+
+    /**
+     * @param  array<int, array{key: string, type: string, enabled: bool}>  $schema
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    private function submissionPayload(array $schema, array $validated): array
+    {
+        $payload = [];
+
+        foreach ($schema as $field) {
+            if (! (bool) ($field['enabled'] ?? false)) {
+                continue;
+            }
+
+            $key = (string) ($field['key'] ?? '');
+            if ($key === '') {
+                continue;
+            }
+
+            $type = (string) ($field['type'] ?? 'text');
+            $value = $validated[$key] ?? null;
+
+            if ($type === 'checkbox') {
+                $payload[$key] = (bool) $value;
+                continue;
+            }
+
+            $payload[$key] = $value;
+        }
+
+        return $payload;
     }
 }

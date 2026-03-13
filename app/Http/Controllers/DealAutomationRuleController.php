@@ -169,7 +169,7 @@ class DealAutomationRuleController extends Controller
         $summary = $engineService->run($tenantId, 500);
 
         return back()->with('success', sprintf(
-            'Automacoes executadas. Regras: %d | Atividades: %d | Notificacoes: %d',
+            'Automações executadas. Regras: %d | Atividades: %d | Notificações: %d',
             $summary['rules_processed'],
             $summary['activities_created'],
             $summary['notifications_created']

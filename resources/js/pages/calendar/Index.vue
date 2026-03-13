@@ -33,6 +33,9 @@ type CalendarEventItem = {
         action: string | null;
         eventable: string;
         attendees_count: number;
+        entity_attendees: string[];
+        person_attendees: string[];
+        deal_attendees: string[];
         status: string;
     };
 };
@@ -62,11 +65,96 @@ const props = defineProps<{
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Calendario', href: '/calendar' },
+    { title: 'Calendário', href: '/calendar' },
 ];
 
 const selectedOwnerId = ref<string>(String(props.filters.owner_id ?? ''));
 const selectedEventableType = ref<string>(String(props.filters.eventable_type ?? ''));
+
+const hoverTooltip = ref<{
+    visible: boolean;
+    x: number;
+    y: number;
+    title: string;
+    period: string;
+    eventable: string;
+    entities: string[];
+    people: string[];
+    deals: string[];
+}>({
+    visible: false,
+    x: 0,
+    y: 0,
+    title: '',
+    period: '',
+    eventable: '-',
+    entities: [],
+    people: [],
+    deals: [],
+});
+
+type CalendarHoverInfo = {
+    jsEvent: MouseEvent;
+    event: {
+        title: string;
+        start: Date | null;
+        end: Date | null;
+        extendedProps: Record<string, unknown>;
+    };
+};
+
+const dateTimeFormatter = new Intl.DateTimeFormat('pt-PT', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+});
+
+function toStringList(value: unknown): string[] {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    return value
+        .filter((item): item is string => typeof item === 'string')
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0);
+}
+
+function formatPeriod(start: Date | null, end: Date | null): string {
+    if (!start) {
+        return '-';
+    }
+
+    const startLabel = dateTimeFormatter.format(start);
+    const endLabel = end ? dateTimeFormatter.format(end) : '-';
+
+    return `${startLabel} - ${endLabel}`;
+}
+
+function showEventTooltip(info: CalendarHoverInfo): void {
+    const preferredX = info.jsEvent.clientX + 16;
+    const preferredY = info.jsEvent.clientY + 16;
+    const x = Math.max(12, Math.min(preferredX, window.innerWidth - 450));
+    const y = Math.max(12, Math.min(preferredY, window.innerHeight - 260));
+
+    hoverTooltip.value = {
+        visible: true,
+        x,
+        y,
+        title: info.event.title || 'Atividade',
+        period: formatPeriod(info.event.start, info.event.end),
+        eventable: String(info.event.extendedProps.eventable ?? '-'),
+        entities: toStringList(info.event.extendedProps.entity_attendees),
+        people: toStringList(info.event.extendedProps.person_attendees),
+        deals: toStringList(info.event.extendedProps.deal_attendees),
+    };
+}
+
+function hideEventTooltip(): void {
+    hoverTooltip.value.visible = false;
+}
 
 watch(
     () => props.filters,
@@ -86,6 +174,12 @@ const calendarOptions = ref({
     },
     events: props.events,
     locale: 'pt',
+    eventMouseEnter: (info: CalendarHoverInfo) => {
+        showEventTooltip(info);
+    },
+    eventMouseLeave: () => {
+        hideEventTooltip();
+    },
     eventClick: (info: { event: { id: string } }) => {
         router.get(`/calendar/${info.event.id}/edit`);
     },
@@ -121,12 +215,12 @@ const columns: ColumnDef<CalendarRow>[] = [
     { accessorKey: 'eventable', header: 'Associacao', cell: ({ row }: { row: { original: CalendarRow } }) => row.original.eventable },
     { accessorKey: 'owner', header: 'Responsavel', cell: ({ row }: { row: { original: CalendarRow } }) => row.original.owner ?? '-' },
     { accessorKey: 'type', header: 'Tipo', cell: ({ row }: { row: { original: CalendarRow } }) => row.original.type ?? '-' },
-    { accessorKey: 'action', header: 'Acao', cell: ({ row }: { row: { original: CalendarRow } }) => row.original.action ?? '-' },
+    { accessorKey: 'action', header: 'Ação', cell: ({ row }: { row: { original: CalendarRow } }) => row.original.action ?? '-' },
     { accessorKey: 'attendees_count', header: 'Attendees', cell: ({ row }: { row: { original: CalendarRow } }) => row.original.attendees_count },
     { accessorKey: 'status', header: 'Estado', cell: ({ row }: { row: { original: CalendarRow } }) => (row.original.status === 'active' ? 'Ativo' : 'Inativo') },
     {
         id: 'actions',
-        header: 'Acoes',
+        header: 'Ações',
         cell: ({ row }: { row: { original: CalendarRow } }) =>
             h('div', { class: 'flex gap-2' }, [
                 h(
@@ -160,13 +254,13 @@ const columns: ColumnDef<CalendarRow>[] = [
 </script>
 
 <template>
-    <Head title="Calendario" />
+    <Head title="Calendário" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
             <Card>
                 <CardHeader class="flex flex-row items-center justify-between">
-                    <CardTitle>Calendario</CardTitle>
+                    <CardTitle>Calendário</CardTitle>
                     <Button as-child>
                         <Link href="/calendar/create">Agendar atividade</Link>
                     </Button>
@@ -209,6 +303,34 @@ const columns: ColumnDef<CalendarRow>[] = [
 
                     <div class="overflow-x-auto rounded-md border bg-background p-2">
                         <FullCalendar :options="calendarOptions" />
+                    </div>
+
+                    <div
+                        v-if="hoverTooltip.visible"
+                        class="pointer-events-none fixed z-50 w-[26rem] max-w-[calc(100vw-2rem)] rounded-md border bg-background p-3 shadow-lg"
+                        :style="{ left: `${hoverTooltip.x}px`, top: `${hoverTooltip.y}px` }"
+                    >
+                        <p class="text-sm font-semibold">{{ hoverTooltip.title }}</p>
+                        <p class="mt-1 text-xs text-muted-foreground">{{ hoverTooltip.period }}</p>
+
+                        <dl class="mt-2 space-y-2 text-xs">
+                            <div>
+                                <dt class="font-medium text-muted-foreground">Associacao principal</dt>
+                                <dd>{{ hoverTooltip.eventable }}</dd>
+                            </div>
+                            <div>
+                                <dt class="font-medium text-muted-foreground">Entidades</dt>
+                                <dd>{{ hoverTooltip.entities.length > 0 ? hoverTooltip.entities.join(', ') : '-' }}</dd>
+                            </div>
+                            <div>
+                                <dt class="font-medium text-muted-foreground">Pessoas</dt>
+                                <dd>{{ hoverTooltip.people.length > 0 ? hoverTooltip.people.join(', ') : '-' }}</dd>
+                            </div>
+                            <div>
+                                <dt class="font-medium text-muted-foreground">Negócios</dt>
+                                <dd>{{ hoverTooltip.deals.length > 0 ? hoverTooltip.deals.join(', ') : '-' }}</dd>
+                            </div>
+                        </dl>
                     </div>
                 </CardContent>
             </Card>

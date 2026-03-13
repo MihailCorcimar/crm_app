@@ -64,11 +64,6 @@ const eventableOptions = computed<SelectOption[]>(() => {
     return [];
 });
 
-function parseIds(values: (string | number)[]): number[] {
-    return values
-        .map((value) => Number(value))
-        .filter((value) => Number.isInteger(value) && value > 0);
-}
 </script>
 
 <template>
@@ -195,7 +190,7 @@ function parseIds(values: (string | number)[]): number[] {
 
             <FormField name="calendar_action_id">
                 <FormItem>
-                    <FormLabel>Acao</FormLabel>
+                    <FormLabel>Ação</FormLabel>
                     <FormControl>
                         <select
                             v-model="form.calendar_action_id"
@@ -219,13 +214,8 @@ function parseIds(values: (string | number)[]): number[] {
                     <FormControl>
                         <select
                             multiple
+                            v-model="form.attendee_entity_ids"
                             class="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring min-h-28 w-full rounded-md border px-3 py-2 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                            :value="form.attendee_entity_ids.map(String)"
-                            @change="
-                                form.attendee_entity_ids = parseIds(
-                                    Array.from(($event.target as HTMLSelectElement).selectedOptions).map((o) => o.value),
-                                )
-                            "
                         >
                             <option v-for="entity in entities" :key="entity.id" :value="entity.id">
                                 {{ entity.name }}
@@ -243,13 +233,8 @@ function parseIds(values: (string | number)[]): number[] {
                     <FormControl>
                         <select
                             multiple
+                            v-model="form.attendee_person_ids"
                             class="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring min-h-28 w-full rounded-md border px-3 py-2 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                            :value="form.attendee_person_ids.map(String)"
-                            @change="
-                                form.attendee_person_ids = parseIds(
-                                    Array.from(($event.target as HTMLSelectElement).selectedOptions).map((o) => o.value),
-                                )
-                            "
                         >
                             <option v-for="person in people" :key="person.id" :value="person.id">
                                 {{ person.name }}
@@ -263,17 +248,12 @@ function parseIds(values: (string | number)[]): number[] {
 
             <FormField name="attendee_deal_ids">
                 <FormItem>
-                    <FormLabel>Attendees - Negocios</FormLabel>
+                    <FormLabel>Attendees - Negócios</FormLabel>
                     <FormControl>
                         <select
                             multiple
+                            v-model="form.attendee_deal_ids"
                             class="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring min-h-28 w-full rounded-md border px-3 py-2 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                            :value="form.attendee_deal_ids.map(String)"
-                            @change="
-                                form.attendee_deal_ids = parseIds(
-                                    Array.from(($event.target as HTMLSelectElement).selectedOptions).map((o) => o.value),
-                                )
-                            "
                         >
                             <option v-for="deal in deals" :key="deal.id" :value="deal.id">
                                 {{ deal.name }}

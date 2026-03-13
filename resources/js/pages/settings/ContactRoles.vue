@@ -23,7 +23,7 @@ const props = defineProps<{
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Configuracoes - Funcoes', href: '/settings/contacts/roles' },
+    { title: 'Configurações - Funções', href: '/settings/contacts/roles' },
 ];
 
 const createForm = useForm({
@@ -91,7 +91,7 @@ const columns: ColumnDef<RoleRow>[] = [
     },
     {
         id: 'actions',
-        header: 'Acoes',
+        header: 'Ações',
         cell: ({ row }: { row: { original: RoleRow } }) =>
             h('div', { class: 'flex gap-2' }, [
                 h(
@@ -120,19 +120,19 @@ const columns: ColumnDef<RoleRow>[] = [
 
 <template>
     <AppLayout :breadcrumbs="breadcrumbs">
-        <Head title="Configuracoes - Funcoes" />
+        <Head title="Configurações - Funções" />
 
         <SettingsLayout :show-system-nav="false">
             <div class="space-y-6">
                 <Heading
                     variant="small"
-                    title="Configuracoes - Contactos - Funcoes"
-                    description="Gerir a lista de funcoes usada nos Contactos."
+                    title="Configurações - Contactos - Funções"
+                    description="Gerir a lista de funções usada nos Contactos."
                 />
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Nova funcao</CardTitle>
+                        <CardTitle>Nova função</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <form class="grid gap-4 md:grid-cols-2" @submit.prevent="createRole">
@@ -169,10 +169,10 @@ const columns: ColumnDef<RoleRow>[] = [
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Funcoes</CardTitle>
+                        <CardTitle>Funções</CardTitle>
                     </CardHeader>
                     <CardContent class="space-y-2">
-                        <DataTable :columns="columns" :data="roles" empty-text="Sem funcoes configuradas." />
+                        <DataTable :columns="columns" :data="roles" empty-text="Sem funções configuradas." />
                     </CardContent>
                 </Card>
             </div>

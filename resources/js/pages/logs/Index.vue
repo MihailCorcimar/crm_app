@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
 import { type ColumnDef } from '@tanstack/vue-table';
 import { ref, watch } from 'vue';
@@ -35,6 +35,11 @@ type UserOption = {
     name: string;
 };
 
+type MenuOption = {
+    value: string;
+    label: string;
+};
+
 const props = defineProps<{
     logs: PaginatedLogs;
     filters: {
@@ -42,7 +47,7 @@ const props = defineProps<{
         menu: string;
     };
     users: UserOption[];
-    menuOptions: string[];
+    menuOptions: MenuOption[];
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -65,7 +70,7 @@ const columns: ColumnDef<LogRow>[] = [
     { accessorKey: 'time', header: 'Hora', cell: ({ row }: { row: { original: LogRow } }) => row.original.time ?? '-' },
     { accessorKey: 'user', header: 'Utilizador' },
     { accessorKey: 'menu', header: 'Menu' },
-    { accessorKey: 'action', header: 'Acao' },
+    { accessorKey: 'action', header: 'Ação' },
     { accessorKey: 'device', header: 'Dispositivo' },
     { accessorKey: 'ip_address', header: 'IP' },
 ];
@@ -111,8 +116,8 @@ function applyFilters(): void {
                                 class="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none"
                             >
                                 <option value="">Todos</option>
-                                <option v-for="menu in menuOptions" :key="menu" :value="menu">
-                                    {{ menu }}
+                                <option v-for="menu in menuOptions" :key="menu.value" :value="menu.value">
+                                    {{ menu.label }}
                                 </option>
                             </select>
                         </div>
@@ -156,3 +161,4 @@ function applyFilters(): void {
         </div>
     </AppLayout>
 </template>
+

@@ -39,7 +39,7 @@ class LogActivity
         ActivityLog::query()->create([
             'occurred_at' => now(),
             'user_id' => auth()->id(),
-            'menu' => $this->menuName($request),
+            'menu' => $this->menuKey($request),
             'action' => $this->actionName($request),
             'device' => $this->deviceType($request),
             'ip_address' => $request->ip(),
@@ -69,21 +69,28 @@ class LogActivity
         };
     }
 
-    private function menuName(Request $request): string
+    private function menuKey(Request $request): string
     {
         $routeName = (string) $request->route()?->getName();
-        $prefix = explode('.', $routeName)[0] ?? 'Unknown';
+        $prefix = explode('.', $routeName)[0] ?? 'unknown';
 
         return match ($prefix) {
-            'entities' => 'Entidades',
-            'contacts', 'people' => 'Pessoas',
-            'deals' => 'Negocios',
-            'lead-forms' => 'Leads Publicos',
-            'calendar' => 'Calendario',
-            'tenants' => 'Tenants',
-            'access' => 'Gestao de Acessos',
-            'settings' => 'Configuracoes',
-            default => ucfirst($prefix),
+            'dashboard' => 'dashboard',
+            'home' => 'home',
+            'entities' => 'entities',
+            'contacts', 'people' => 'people',
+            'deals' => 'deals',
+            'items' => 'items',
+            'lead-forms', 'public' => 'lead_forms',
+            'calendar' => 'calendar',
+            'ai' => 'ai',
+            'automations' => 'automations',
+            'tenants' => 'tenants',
+            'access' => 'access',
+            'settings' => 'settings',
+            'logs' => 'logs',
+            'login', 'register', 'password', 'verification', 'two-factor', 'logout' => 'auth',
+            default => ActivityLog::canonicalMenuKey($prefix),
         };
     }
 
@@ -94,3 +101,4 @@ class LogActivity
         return str_contains($agent, 'mobile') ? 'Mobile' : 'Desktop';
     }
 }
+

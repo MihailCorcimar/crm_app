@@ -23,7 +23,7 @@ const props = defineProps<{
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Configuracoes - Empresa', href: '/settings/company' },
+    { title: 'Configurações - Empresa', href: '/settings/company' },
 ];
 
 const form = useForm({
@@ -49,14 +49,14 @@ function submit(): void {
 </script>
 
 <template>
-    <Head title="Configuracoes - Empresa" />
+    <Head title="Configurações - Empresa" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <SettingsLayout :show-system-nav="false">
             <div class="space-y-6">
                 <Heading
                     variant="small"
-                    title="Configuracoes - Empresa"
+                    title="Configurações - Empresa"
                     description="Dados usados no branding da aplicacao e em documentos PDF."
                 />
 

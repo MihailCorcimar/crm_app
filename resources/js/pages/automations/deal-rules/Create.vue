@@ -23,7 +23,7 @@ const props = defineProps<{
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Automacoes', href: '/automations/deal-rules' },
+    { title: 'Automações', href: '/automations/deal-rules' },
     { title: 'Nova regra', href: '/automations/deal-rules/create' },
 ];
 

@@ -24,7 +24,7 @@ const props = defineProps<{
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Configuracoes - Paises', href: '/settings/entities/countries' },
+    { title: 'Configurações - Paises', href: '/settings/entities/countries' },
 ];
 
 const createForm = useForm({
@@ -99,7 +99,7 @@ const columns: ColumnDef<CountryRow>[] = [
     },
     {
         id: 'actions',
-        header: 'Acoes',
+        header: 'Ações',
         cell: ({ row }: { row: { original: CountryRow } }) =>
             h('div', { class: 'flex gap-2' }, [
                 h(
@@ -128,13 +128,13 @@ const columns: ColumnDef<CountryRow>[] = [
 
 <template>
     <AppLayout :breadcrumbs="breadcrumbs">
-        <Head title="Configuracoes - Paises" />
+        <Head title="Configurações - Paises" />
 
         <SettingsLayout :show-system-nav="false">
             <div class="space-y-6">
                 <Heading
                     variant="small"
-                    title="Configuracoes - Entidades - Paises"
+                    title="Configurações - Entidades - Paises"
                     description="Gerir a lista de paises usada nas Entidades."
                 />
 

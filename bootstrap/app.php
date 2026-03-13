@@ -20,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
+        $middleware->validateCsrfTokens(except: ['public/lead-forms/*']);
         $middleware->alias([
             'tenant.active' => EnsureActiveTenant::class,
             'tenant.feature' => EnsureTenantFeature::class,

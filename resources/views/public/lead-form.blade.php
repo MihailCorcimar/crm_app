@@ -46,7 +46,7 @@
             font-size: 14px;
             font-weight: 600;
         }
-        input, textarea {
+        input, textarea, select {
             box-sizing: border-box;
             width: 100%;
             border: 1px solid #d4d4d8;
@@ -112,7 +112,6 @@
     <div class="wrap">
         <div class="card">
             <h1>{{ $leadForm->name }}</h1>
-            <p class="muted">Preenche os campos abaixo para criar uma lead no CRM.</p>
 
             @if ($successMessage)
                 <div class="alert-success">{{ $successMessage }}</div>
@@ -143,12 +142,14 @@
                         @endphp
 
                         <div>
-                            <label for="{{ $fieldKey }}">
-                                {{ $fieldLabel }}
-                                @if ($fieldRequired)
-                                    <span class="required">*</span>
-                                @endif
-                            </label>
+                            @if ($fieldType !== 'checkbox')
+                                <label for="{{ $fieldKey }}">
+                                    {{ $fieldLabel }}
+                                    @if ($fieldRequired)
+                                        <span class="required">*</span>
+                                    @endif
+                                </label>
+                            @endif
 
                             @if ($fieldType === 'textarea')
                                 <textarea
@@ -156,6 +157,44 @@
                                     name="{{ $fieldKey }}"
                                     @if ($fieldRequired) required @endif
                                 >{{ is_string($oldValue) ? $oldValue : '' }}</textarea>
+                            @elseif ($fieldType === 'select')
+                                @php
+                                    $fieldOptions = is_array($field['options'] ?? null) ? $field['options'] : [];
+                                    $selectedValue = is_string($oldValue) ? $oldValue : '';
+                                @endphp
+                                <select id="{{ $fieldKey }}" name="{{ $fieldKey }}" @if ($fieldRequired) required @endif>
+                                    <option value="">Selecionar</option>
+                                    @foreach ($fieldOptions as $option)
+                                        @php
+                                            $optionValue = trim((string) $option);
+                                        @endphp
+                                        @if ($optionValue !== '')
+                                            <option value="{{ $optionValue }}" @selected($selectedValue === $optionValue)>
+                                                {{ $optionValue }}
+                                            </option>
+                                        @endif
+                                    @endforeach
+                                </select>
+                            @elseif ($fieldType === 'checkbox')
+                                @php
+                                    $checked = old($fieldKey) === '1' || old($fieldKey) === 1 || old($fieldKey) === true || old($fieldKey) === 'on';
+                                @endphp
+                                <label for="{{ $fieldKey }}" style="display:flex;align-items:center;gap:8px;font-weight:400;margin-bottom:0;">
+                                    <input
+                                        id="{{ $fieldKey }}"
+                                        name="{{ $fieldKey }}"
+                                        type="checkbox"
+                                        value="1"
+                                        @checked($checked)
+                                        style="width:auto;"
+                                    >
+                                    <span>
+                                        {{ $fieldLabel }}
+                                        @if ($fieldRequired)
+                                            <span class="required">*</span>
+                                        @endif
+                                    </span>
+                                </label>
                             @else
                                 <input
                                     id="{{ $fieldKey }}"
@@ -172,23 +211,41 @@
                         </div>
                     @endforeach
 
-                    @if ($leadForm->requires_captcha && is_array($captcha))
-                        <div>
-                            <label for="captcha_answer">
-                                Captcha obrigatorio <span class="required">*</span>
-                            </label>
-                            <input
-                                id="captcha_answer"
-                                name="captcha_answer"
-                                type="number"
-                                required
-                                placeholder="Quanto e {{ $captcha['a'] }} + {{ $captcha['b'] }}?"
-                                value="{{ old('captcha_answer') }}"
-                            >
-                            @error('captcha_answer')
-                                <div class="error">{{ $message }}</div>
-                            @enderror
-                        </div>
+                    @if ($leadForm->requires_captcha)
+                        @if (($useTurnstile ?? false) && ! empty($turnstileSiteKey))
+                            <div>
+                                <label>
+                                    Captcha obrigatorio <span class="required">*</span>
+                                </label>
+                                <div
+                                    class="cf-turnstile"
+                                    data-sitekey="{{ $turnstileSiteKey }}"
+                                    data-theme="light"
+                                    data-size="normal"
+                                    data-appearance="always"
+                                ></div>
+                                @error('cf-turnstile-response')
+                                    <div class="error">{{ $message }}</div>
+                                @enderror
+                            </div>
+                        @elseif (is_array($captcha))
+                            <div>
+                                <label for="captcha_answer">
+                                    Captcha obrigatorio <span class="required">*</span>
+                                </label>
+                                <input
+                                    id="captcha_answer"
+                                    name="captcha_answer"
+                                    type="number"
+                                    required
+                                    placeholder="Quanto e {{ $captcha['a'] }} + {{ $captcha['b'] }}?"
+                                    value="{{ old('captcha_answer') }}"
+                                >
+                                @error('captcha_answer')
+                                    <div class="error">{{ $message }}</div>
+                                @enderror
+                            </div>
+                        @endif
                     @endif
                 </div>
 
@@ -196,8 +253,6 @@
                     <button type="submit">Enviar</button>
                 </div>
             </form>
-
-            <div class="foot">Origem: {{ $mode }}</div>
         </div>
     </div>
 
@@ -212,6 +267,8 @@
             sourceInput.value = referrer || window.location.href;
         })();
     </script>
+    @if (($useTurnstile ?? false) && ! empty($turnstileSiteKey))
+        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    @endif
 </body>
 </html>
-

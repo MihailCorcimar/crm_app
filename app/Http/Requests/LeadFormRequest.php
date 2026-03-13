@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\LeadForm;
+use App\Support\LeadFormFieldCatalog;
 use App\Support\TenantContext;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Str;
@@ -46,6 +47,8 @@ class LeadFormRequest extends FormRequest
         /** @var LeadForm|null $leadForm */
         $leadForm = $this->route('leadForm');
         $tenantId = TenantContext::id($this) ?? (int) ($this->user()?->current_tenant_id ?? 0);
+        $fieldCatalog = app(LeadFormFieldCatalog::class);
+        $allowedTypes = $fieldCatalog->allowedTypes();
 
         return [
             'name' => ['required', 'string', 'max:120'],
@@ -62,11 +65,20 @@ class LeadFormRequest extends FormRequest
             'requires_captcha' => ['required', 'boolean'],
             'confirmation_message' => ['required', 'string', 'max:1000'],
             'field_schema' => ['required', 'array', 'min:1'],
-            'field_schema.*.key' => ['required', Rule::in(['full_name', 'email', 'phone', 'company', 'message'])],
+            'field_schema.*.key' => [
+                'required',
+                'string',
+                'max:64',
+                'regex:/^[a-z][a-z0-9_]{2,63}$/',
+                'distinct',
+                Rule::notIn(['website', 'source_type', 'source_url', 'captcha_answer']),
+            ],
             'field_schema.*.label' => ['required', 'string', 'max:60'],
-            'field_schema.*.type' => ['required', Rule::in(['text', 'email', 'tel', 'textarea'])],
+            'field_schema.*.type' => ['required', Rule::in($allowedTypes)],
             'field_schema.*.enabled' => ['required', 'boolean'],
             'field_schema.*.required' => ['required', 'boolean'],
+            'field_schema.*.options' => ['sometimes', 'array'],
+            'field_schema.*.options.*' => ['nullable', 'string', 'max:80'],
         ];
     }
 
@@ -91,7 +103,24 @@ class LeadFormRequest extends FormRequest
             if ($invalidRequired !== null) {
                 $validator->errors()->add('field_schema', 'Um campo marcado como obrigatorio tem de estar ativo.');
             }
+
+            foreach ($schema as $index => $field) {
+                $type = strtolower(trim((string) ($field['type'] ?? '')));
+                $options = $field['options'] ?? [];
+                $enabled = (bool) ($field['enabled'] ?? false);
+
+                if ($type === 'select' && $enabled) {
+                    $validOptions = collect(is_array($options) ? $options : [])
+                        ->map(fn (mixed $option): string => trim((string) $option))
+                        ->filter(fn (string $option): bool => $option !== '')
+                        ->unique()
+                        ->values();
+
+                    if ($validOptions->count() < 1) {
+                        $validator->errors()->add("field_schema.{$index}.options", 'Campos do tipo select precisam de pelo menos uma opcao.');
+                    }
+                }
+            }
         });
     }
 }
-

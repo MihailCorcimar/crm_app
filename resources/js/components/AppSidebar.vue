@@ -59,12 +59,12 @@ const mainNavItems: NavItem[] = [
         icon: MessageSquare,
     },
     {
-        title: 'Formularios',
+        title: 'Formulários',
         href: '/lead-forms',
         icon: FileSignature,
     },
     {
-        title: 'Automacoes',
+        title: 'Automações',
         href: '/automations/deal-rules',
         icon: Workflow,
         children: [

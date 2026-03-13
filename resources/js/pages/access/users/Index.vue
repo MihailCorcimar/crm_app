@@ -68,7 +68,7 @@ const columns: ColumnDef<UserRow>[] = [
     { accessorKey: 'status', header: 'Estado', cell: ({ row }: { row: { original: UserRow } }) => (row.original.status === 'active' ? 'Ativo' : 'Inativo') },
     {
         id: 'actions',
-        header: 'Acoes',
+        header: 'Ações',
         cell: ({ row }: { row: { original: UserRow } }) =>
             h('div', { class: 'flex gap-2' }, [
                 h(

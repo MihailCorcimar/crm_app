@@ -13,13 +13,22 @@ class LogController extends Controller
     public function index(Request $request): Response
     {
         $query = ActivityLog::query()->with('user:id,name');
+        $selectedMenu = $request->query('menu', '');
 
         if ($request->filled('user_id')) {
             $query->where('user_id', $request->integer('user_id'));
         }
 
-        if ($request->filled('menu')) {
-            $query->where('menu', $request->string('menu')->toString());
+        if (is_string($selectedMenu) && trim($selectedMenu) !== '') {
+            $menuKey = ActivityLog::canonicalMenuKey($selectedMenu);
+            $menuValues = ActivityLog::menuFilterValues($menuKey);
+
+            $query->where(function ($subQuery) use ($menuValues): void {
+                foreach ($menuValues as $index => $menuValue) {
+                    $method = $index === 0 ? 'whereRaw' : 'orWhereRaw';
+                    $subQuery->{$method}('LOWER(menu) = ?', [mb_strtolower($menuValue)]);
+                }
+            });
         }
 
         $logs = $query
@@ -31,20 +40,12 @@ class LogController extends Controller
                 'date' => $activityLog->occurred_at?->format('Y-m-d'),
                 'time' => $activityLog->occurred_at?->format('H:i:s'),
                 'user' => $activityLog->user?->name ?? '-',
-                'menu' => $activityLog->menu ?? '-',
+                'menu' => ActivityLog::menuLabel($activityLog->menu),
                 'action' => $activityLog->action,
                 'device' => $activityLog->device ?? '-',
                 'ip_address' => $activityLog->ip_address ?? '-',
             ]);
-
-        $menuOptions = ActivityLog::query()
-            ->select('menu')
-            ->whereNotNull('menu')
-            ->distinct()
-            ->orderBy('menu')
-            ->pluck('menu')
-            ->values()
-            ->all();
+        $menuOptions = ActivityLog::menuOptions();
 
         $users = User::query()
             ->orderBy('name')
@@ -59,7 +60,9 @@ class LogController extends Controller
             'logs' => $logs,
             'filters' => [
                 'user_id' => $request->query('user_id', ''),
-                'menu' => $request->query('menu', ''),
+                'menu' => is_string($selectedMenu) && trim($selectedMenu) !== ''
+                    ? ActivityLog::canonicalMenuKey($selectedMenu)
+                    : '',
             ],
             'menuOptions' => $menuOptions,
             'users' => $users,

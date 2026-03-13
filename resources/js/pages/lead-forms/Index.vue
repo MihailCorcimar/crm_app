@@ -35,7 +35,7 @@ const props = defineProps<{
     };
 }>();
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Formularios publicos', href: '/lead-forms' }];
+const breadcrumbs: BreadcrumbItem[] = [{ title: 'Formulários publicos', href: '/lead-forms' }];
 
 const filterForm = useForm({
     q: props.filters.q ?? '',
@@ -57,7 +57,7 @@ function clearFilters(): void {
 }
 
 function removeForm(formId: number): void {
-    if (!window.confirm('Remover este formulario publico?')) {
+    if (!window.confirm('Remover este formulário publico?')) {
         return;
     }
 
@@ -66,7 +66,7 @@ function removeForm(formId: number): void {
 </script>
 
 <template>
-    <Head title="Formularios publicos" />
+    <Head title="Formulários publicos" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
@@ -103,14 +103,14 @@ function removeForm(formId: number): void {
 
             <Card>
                 <CardHeader class="flex flex-row items-center justify-between">
-                    <CardTitle>Formularios publicos</CardTitle>
+                    <CardTitle>Formulários publicos</CardTitle>
                     <Button as-child>
-                        <Link href="/lead-forms/create">Criar formulario</Link>
+                        <Link href="/lead-forms/create">Criar formulário</Link>
                     </Button>
                 </CardHeader>
                 <CardContent>
                     <div v-if="forms.data.length === 0" class="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-                        Sem formularios para os filtros selecionados.
+                        Sem formulários para os filtros selecionados.
                     </div>
 
                     <template v-else>
@@ -118,12 +118,12 @@ function removeForm(formId: number): void {
                             <table class="min-w-full text-sm">
                                 <thead class="bg-muted/50">
                                     <tr>
-                                        <th class="px-3 py-2 text-left font-medium">Formulario</th>
+                                        <th class="px-3 py-2 text-left font-medium">Formulário</th>
                                         <th class="px-3 py-2 text-left font-medium">Estado</th>
                                         <th class="px-3 py-2 text-right font-medium">Campos</th>
                                         <th class="px-3 py-2 text-right font-medium">Submissoes</th>
                                         <th class="px-3 py-2 text-left font-medium">URL publica</th>
-                                        <th class="px-3 py-2 text-right font-medium">Acoes</th>
+                                        <th class="px-3 py-2 text-right font-medium">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -147,7 +147,7 @@ function removeForm(formId: number): void {
                                         <td class="px-3 py-2 text-right">{{ formRow.submissions_count }}</td>
                                         <td class="px-3 py-2">
                                             <a :href="formRow.public_url" target="_blank" rel="noopener noreferrer" class="text-xs text-blue-700 underline">
-                                                Abrir formulario
+                                                Abrir formulário
                                             </a>
                                         </td>
                                         <td class="px-3 py-2 text-right">

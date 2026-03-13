@@ -24,7 +24,7 @@ const props = defineProps<{
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Configuracoes - Calendario - Tipos', href: '/settings/calendar/types' },
+    { title: 'Configurações - Calendário - Tipos', href: '/settings/calendar/types' },
 ];
 
 const createForm = useForm({
@@ -90,7 +90,7 @@ const columns: ColumnDef<CalendarTypeRow>[] = [
     { accessorKey: 'status', header: 'Estado', cell: ({ row }: { row: { original: CalendarTypeRow } }) => (row.original.status === 'active' ? 'Ativo' : 'Inativo') },
     {
         id: 'actions',
-        header: 'Acoes',
+        header: 'Ações',
         cell: ({ row }: { row: { original: CalendarTypeRow } }) =>
             h('div', { class: 'flex gap-2' }, [
                 h(
@@ -119,13 +119,13 @@ const columns: ColumnDef<CalendarTypeRow>[] = [
 
 <template>
     <AppLayout :breadcrumbs="breadcrumbs">
-        <Head title="Configuracoes - Calendario - Tipos" />
+        <Head title="Configurações - Calendário - Tipos" />
 
         <SettingsLayout :show-system-nav="false">
             <div class="space-y-6">
                 <Heading
                     variant="small"
-                    title="Configuracoes - Calendario - Tipos"
+                    title="Configurações - Calendário - Tipos"
                     description="Gerir os tipos utilizados no calendario."
                 />
 

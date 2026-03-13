@@ -54,7 +54,7 @@ const props = defineProps<{
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Automacoes', href: '/automations/deal-rules' },
+    { title: 'Automações', href: '/automations/deal-rules' },
 ];
 
 function runNow(): void {
@@ -100,13 +100,13 @@ function priorityLabel(value: string): string {
 </script>
 
 <template>
-    <Head title="Automacoes de negocios" />
+    <Head title="Automações de negocios" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
             <Card>
                 <CardHeader class="flex flex-row items-center justify-between">
-                    <CardTitle>Gestao de automacoes</CardTitle>
+                    <CardTitle>Gestao de automações</CardTitle>
                     <div class="flex gap-2">
                         <Button variant="outline" @click="runNow">Executar agora</Button>
                         <Button as-child>
@@ -126,10 +126,10 @@ function priorityLabel(value: string): string {
                                     <tr>
                                         <th class="px-3 py-2 text-left font-medium">Regra</th>
                                         <th class="px-3 py-2 text-left font-medium">Condicao</th>
-                                        <th class="px-3 py-2 text-left font-medium">Acao</th>
+                                        <th class="px-3 py-2 text-left font-medium">Ação</th>
                                         <th class="px-3 py-2 text-left font-medium">Estado</th>
                                         <th class="px-3 py-2 text-left font-medium">Atualizada</th>
-                                        <th class="px-3 py-2 text-right font-medium">Acoes</th>
+                                        <th class="px-3 py-2 text-right font-medium">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody>
