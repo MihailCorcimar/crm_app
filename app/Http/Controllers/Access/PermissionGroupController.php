@@ -11,36 +11,36 @@ use Inertia\Response;
 
 class PermissionGroupController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('module.permission:access,read')->only(['index']);
+        $this->middleware('module.permission:access,create')->only(['create', 'store']);
+        $this->middleware('module.permission:access,update')->only(['edit', 'update']);
+        $this->middleware('module.permission:access,delete')->only(['destroy']);
+    }
+
     public function index(): Response
     {
         $permissionGroups = PermissionGroup::query()
             ->withCount('users')
             ->orderBy('name')
             ->get()
-            ->map(fn (PermissionGroup $permissionGroup): array => [
-                'id' => $permissionGroup->id,
-                'name' => $permissionGroup->name,
-                'menu_a_create' => $permissionGroup->menu_a_create,
-                'menu_a_read' => $permissionGroup->menu_a_read,
-                'menu_a_update' => $permissionGroup->menu_a_update,
-                'menu_a_delete' => $permissionGroup->menu_a_delete,
-                'menu_b_create' => $permissionGroup->menu_b_create,
-                'menu_b_read' => $permissionGroup->menu_b_read,
-                'menu_b_update' => $permissionGroup->menu_b_update,
-                'menu_b_delete' => $permissionGroup->menu_b_delete,
-                'users_count' => $permissionGroup->users_count,
-                'status' => $permissionGroup->status,
-            ])
+            ->map(fn (PermissionGroup $permissionGroup): array => $this->groupPayload($permissionGroup, true))
             ->all();
 
         return Inertia::render('access/permission-groups/Index', [
             'permissionGroups' => $permissionGroups,
+            'permissionModules' => PermissionGroup::MODULES,
+            'permissionActions' => PermissionGroup::ACTIONS,
         ]);
     }
 
     public function create(): Response
     {
-        return Inertia::render('access/permission-groups/Create');
+        return Inertia::render('access/permission-groups/Create', [
+            'permissionModules' => PermissionGroup::MODULES,
+            'permissionActions' => PermissionGroup::ACTIONS,
+        ]);
     }
 
     public function store(PermissionGroupRequest $request): RedirectResponse
@@ -53,19 +53,9 @@ class PermissionGroupController extends Controller
     public function edit(PermissionGroup $permissionGroup): Response
     {
         return Inertia::render('access/permission-groups/Edit', [
-            'permissionGroup' => [
-                'id' => $permissionGroup->id,
-                'name' => $permissionGroup->name,
-                'menu_a_create' => $permissionGroup->menu_a_create,
-                'menu_a_read' => $permissionGroup->menu_a_read,
-                'menu_a_update' => $permissionGroup->menu_a_update,
-                'menu_a_delete' => $permissionGroup->menu_a_delete,
-                'menu_b_create' => $permissionGroup->menu_b_create,
-                'menu_b_read' => $permissionGroup->menu_b_read,
-                'menu_b_update' => $permissionGroup->menu_b_update,
-                'menu_b_delete' => $permissionGroup->menu_b_delete,
-                'status' => $permissionGroup->status,
-            ],
+            'permissionGroup' => $this->groupPayload($permissionGroup),
+            'permissionModules' => PermissionGroup::MODULES,
+            'permissionActions' => PermissionGroup::ACTIONS,
         ]);
     }
 
@@ -86,5 +76,27 @@ class PermissionGroupController extends Controller
         $permissionGroup->delete();
 
         return to_route('access.permission-groups.index');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function groupPayload(PermissionGroup $permissionGroup, bool $withUsersCount = false): array
+    {
+        $payload = [
+            'id' => $permissionGroup->id,
+            'name' => $permissionGroup->name,
+            'status' => $permissionGroup->status,
+        ];
+
+        foreach (PermissionGroup::permissionColumns() as $column) {
+            $payload[$column] = (bool) $permissionGroup->getAttribute($column);
+        }
+
+        if ($withUsersCount) {
+            $payload['users_count'] = (int) ($permissionGroup->users_count ?? 0);
+        }
+
+        return $payload;
     }
 }

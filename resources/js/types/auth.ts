@@ -15,6 +15,7 @@ export type User = {
 
 export type Auth = {
     user: User;
+    module_permissions: Record<string, Record<string, boolean>>;
 };
 
 export type TwoFactorConfigContent = {

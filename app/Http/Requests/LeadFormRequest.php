@@ -3,9 +3,11 @@
 namespace App\Http\Requests;
 
 use App\Models\LeadForm;
+use App\Support\DealStageService;
 use App\Support\LeadFormFieldCatalog;
 use App\Support\TenantContext;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -49,6 +51,7 @@ class LeadFormRequest extends FormRequest
         $tenantId = TenantContext::id($this) ?? (int) ($this->user()?->current_tenant_id ?? 0);
         $fieldCatalog = app(LeadFormFieldCatalog::class);
         $allowedTypes = $fieldCatalog->allowedTypes();
+        $allowedStages = app(DealStageService::class)->valuesForTenant($tenantId);
 
         return [
             'name' => ['required', 'string', 'max:120'],
@@ -79,11 +82,22 @@ class LeadFormRequest extends FormRequest
             'field_schema.*.required' => ['required', 'boolean'],
             'field_schema.*.options' => ['sometimes', 'array'],
             'field_schema.*.options.*' => ['nullable', 'string', 'max:80'],
+            'conversion_settings' => ['required', 'array'],
+            'conversion_settings.create_deal' => ['required', 'boolean'],
+            'conversion_settings.entity_name_field_key' => ['nullable', 'string', 'max:64'],
+            'conversion_settings.deal_title_field_key' => ['nullable', 'string', 'max:64'],
+            'conversion_settings.deal_title_template' => ['nullable', 'string', 'max:180'],
+            'conversion_settings.deal_value_field_key' => ['nullable', 'string', 'max:64'],
+            'conversion_settings.deal_stage' => ['required', 'string', Rule::in($allowedStages)],
+            'conversion_settings.deal_owner_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
+            'conversion_settings.deal_probability' => ['required', 'integer', 'min:0', 'max:100'],
         ];
     }
 
     public function withValidator(Validator $validator): void
     {
+        $tenantId = TenantContext::id($this) ?? (int) ($this->user()?->current_tenant_id ?? 0);
+
         $validator->after(function (Validator $validator): void {
             /** @var array<int, array<string, mixed>> $schema */
             $schema = $this->input('field_schema', []);
@@ -121,6 +135,38 @@ class LeadFormRequest extends FormRequest
                     }
                 }
             }
+
+            $schemaKeys = collect($schema)
+                ->map(fn (array $field): string => (string) ($field['key'] ?? ''))
+                ->filter(fn (string $key): bool => $key !== '')
+                ->values();
+
+            /** @var array<string, mixed> $conversion */
+            $conversion = is_array($this->input('conversion_settings')) ? $this->input('conversion_settings') : [];
+            $mappedKeys = collect([
+                $conversion['entity_name_field_key'] ?? null,
+                $conversion['deal_title_field_key'] ?? null,
+                $conversion['deal_value_field_key'] ?? null,
+            ])
+                ->filter(fn (mixed $key): bool => is_string($key) && trim($key) !== '')
+                ->map(fn (mixed $key): string => trim((string) $key))
+                ->values();
+
+            foreach ($mappedKeys as $mappedKey) {
+                if (! $schemaKeys->contains($mappedKey)) {
+                    $validator->errors()->add('conversion_settings', "O campo mapeado '{$mappedKey}' nao existe no formulario.");
+                }
+            }
+
+            $ownerId = $conversion['deal_owner_id'] ?? null;
+            if (is_numeric($ownerId) && (int) $ownerId > 0 && ! DB::table('tenant_user')
+                ->where('tenant_id', $tenantId)
+                ->where('user_id', (int) $ownerId)
+                ->exists()
+            ) {
+                $validator->errors()->add('conversion_settings.deal_owner_id', 'O responsavel selecionado nao pertence ao tenant ativo.');
+            }
         });
     }
 }
+

@@ -12,33 +12,20 @@ class PermissionGroupSeeder extends Seeder
      */
     public function run(): void
     {
+        $permissions = [];
+        foreach (PermissionGroup::permissionColumns() as $column) {
+            $permissions[$column] = true;
+        }
+
         PermissionGroup::query()->upsert(
             [
-                [
+                array_merge([
                     'name' => 'Administrators',
-                    'menu_a_create' => true,
-                    'menu_a_read' => true,
-                    'menu_a_update' => true,
-                    'menu_a_delete' => true,
-                    'menu_b_create' => true,
-                    'menu_b_read' => true,
-                    'menu_b_update' => true,
-                    'menu_b_delete' => true,
                     'status' => 'active',
-                ],
+                ], $permissions),
             ],
             ['name'],
-            [
-                'menu_a_create',
-                'menu_a_read',
-                'menu_a_update',
-                'menu_a_delete',
-                'menu_b_create',
-                'menu_b_read',
-                'menu_b_update',
-                'menu_b_delete',
-                'status',
-            ]
+            array_merge(PermissionGroup::permissionColumns(), ['status'])
         );
     }
 }

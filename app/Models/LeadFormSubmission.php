@@ -10,6 +10,12 @@ class LeadFormSubmission extends Model
 {
     use HasFactory;
 
+    public const STATUS_NEW = 'new';
+
+    public const STATUS_CONVERTED = 'converted';
+
+    public const STATUS_IGNORED = 'ignored';
+
     /**
      * @var list<string>
      */
@@ -17,6 +23,13 @@ class LeadFormSubmission extends Model
         'lead_form_id',
         'tenant_id',
         'contact_id',
+        'status',
+        'entity_id',
+        'deal_id',
+        'converted_at',
+        'converted_by',
+        'ignored_at',
+        'ignored_by',
         'source_type',
         'source_url',
         'source_origin',
@@ -36,6 +49,8 @@ class LeadFormSubmission extends Model
             'captcha_passed' => 'boolean',
             'payload' => 'array',
             'submitted_at' => 'datetime',
+            'converted_at' => 'datetime',
+            'ignored_at' => 'datetime',
         ];
     }
 
@@ -54,5 +69,36 @@ class LeadFormSubmission extends Model
     {
         return $this->belongsTo(Contact::class);
     }
-}
 
+    /**
+     * @return BelongsTo<Entity, $this>
+     */
+    public function entity(): BelongsTo
+    {
+        return $this->belongsTo(Entity::class);
+    }
+
+    /**
+     * @return BelongsTo<Deal, $this>
+     */
+    public function deal(): BelongsTo
+    {
+        return $this->belongsTo(Deal::class);
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function convertedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'converted_by');
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function ignoredBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'ignored_by');
+    }
+}

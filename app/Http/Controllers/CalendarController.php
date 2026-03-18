@@ -12,6 +12,7 @@ use App\Models\Entity;
 use App\Models\User;
 use App\Support\TenantContext;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -47,6 +48,9 @@ class CalendarController extends Controller
             }
         }
 
+        $timeScope = $request->string('time_scope')->toString();
+        $this->applyTimeScopeFilter($baseQuery, $timeScope);
+
         $events = (clone $baseQuery)
             ->orderBy('start_at')
             ->get()
@@ -65,6 +69,7 @@ class CalendarController extends Controller
                     'person_attendees' => $this->attendeeLabels($calendarEvent, Contact::class),
                     'deal_attendees' => $this->attendeeLabels($calendarEvent, Deal::class),
                     'status' => $calendarEvent->status,
+                    'time_state' => $this->timeStateLabel($calendarEvent),
                 ],
             ])
             ->all();
@@ -83,6 +88,7 @@ class CalendarController extends Controller
                 'action' => $calendarEvent->action?->name,
                 'attendees_count' => $calendarEvent->attendees->count(),
                 'status' => $calendarEvent->status,
+                'time_state' => $this->timeStateLabel($calendarEvent),
             ])
             ->all();
 
@@ -92,6 +98,7 @@ class CalendarController extends Controller
             'filters' => [
                 'owner_id' => $request->query('owner_id', ''),
                 'eventable_type' => $request->query('eventable_type', ''),
+                'time_scope' => $request->query('time_scope', 'all'),
             ],
             'owners' => $this->owners(),
             'eventableTypes' => $this->eventableTypes(),
@@ -380,7 +387,7 @@ class CalendarController extends Controller
     }
 
     /**
-     * @return array<int, array{id: int, name: string}>
+     * @return array<int, array{id: int, name: string, entity_id: int|null}>
      */
     private function people(): array
     {
@@ -388,26 +395,28 @@ class CalendarController extends Controller
             ->where('status', 'active')
             ->orderBy('first_name')
             ->orderBy('last_name')
-            ->get(['id', 'first_name', 'last_name'])
+            ->get(['id', 'first_name', 'last_name', 'entity_id'])
             ->map(fn (Contact $person): array => [
                 'id' => $person->id,
                 'name' => trim($person->first_name.' '.($person->last_name ?? '')),
+                'entity_id' => $person->entity_id,
             ])
             ->all();
     }
 
     /**
-     * @return array<int, array{id: int, name: string}>
+     * @return array<int, array{id: int, name: string, entity_id: int|null}>
      */
     private function deals(): array
     {
         return Deal::query()
             ->orderByDesc('updated_at')
             ->limit(200)
-            ->get(['id', 'title'])
+            ->get(['id', 'title', 'entity_id'])
             ->map(fn (Deal $deal): array => [
                 'id' => $deal->id,
                 'name' => $deal->title,
+                'entity_id' => $deal->entity_id,
             ])
             ->all();
     }
@@ -442,6 +451,46 @@ class CalendarController extends Controller
                 'name' => $calendarAction->name,
             ])
             ->all();
+    }
+
+    private function applyTimeScopeFilter(Builder $query, string $timeScope): void
+    {
+        $now = now();
+
+        if ($timeScope === 'past') {
+            $query->where('end_at', '<', $now);
+
+            return;
+        }
+
+        if ($timeScope === 'upcoming') {
+            $query->where('end_at', '>=', $now);
+
+            return;
+        }
+
+        if ($timeScope === 'today') {
+            $query
+                ->where('start_at', '<=', $now->copy()->endOfDay())
+                ->where('end_at', '>=', $now->copy()->startOfDay());
+        }
+    }
+
+    private function timeStateLabel(CalendarEvent $calendarEvent): string
+    {
+        $now = now();
+        $startAt = $calendarEvent->startAt();
+        $endAt = $calendarEvent->endAt();
+
+        if ($endAt->lessThan($now)) {
+            return 'past';
+        }
+
+        if ($startAt->lessThanOrEqualTo($now) && $endAt->greaterThanOrEqualTo($now)) {
+            return 'today';
+        }
+
+        return 'upcoming';
     }
 
     private function eventableClass(?string $eventableType): ?string

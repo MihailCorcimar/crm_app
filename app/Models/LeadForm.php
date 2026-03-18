@@ -27,6 +27,7 @@ class LeadForm extends Model
         'requires_captcha',
         'confirmation_message',
         'field_schema',
+        'conversion_settings',
         'embed_token',
         'created_by',
         'updated_by',
@@ -40,6 +41,7 @@ class LeadForm extends Model
         return [
             'requires_captcha' => 'boolean',
             'field_schema' => 'array',
+            'conversion_settings' => 'array',
         ];
     }
 
@@ -67,4 +69,3 @@ class LeadForm extends Model
         return $this->belongsTo(User::class, 'updated_by');
     }
 }
-

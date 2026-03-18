@@ -12,26 +12,26 @@ class CalendarEventPolicy
 
     public function viewAny(User $user): bool
     {
-        return $this->canAccessActiveTenant($user);
+        return $this->canAccessActiveTenant($user, 'calendar', 'read');
     }
 
     public function view(User $user, CalendarEvent $calendarEvent): bool
     {
-        return $this->canAccessTenantRecord($user, (int) $calendarEvent->tenant_id);
+        return $this->canAccessTenantRecord($user, (int) $calendarEvent->tenant_id, 'calendar', 'read');
     }
 
     public function create(User $user): bool
     {
-        return $this->canAccessActiveTenant($user);
+        return $this->canAccessActiveTenant($user, 'calendar', 'create');
     }
 
     public function update(User $user, CalendarEvent $calendarEvent): bool
     {
-        return $this->canAccessTenantRecord($user, (int) $calendarEvent->tenant_id);
+        return $this->canAccessTenantRecord($user, (int) $calendarEvent->tenant_id, 'calendar', 'update');
     }
 
     public function delete(User $user, CalendarEvent $calendarEvent): bool
     {
-        return $this->canAccessTenantRecord($user, (int) $calendarEvent->tenant_id);
+        return $this->canAccessTenantRecord($user, (int) $calendarEvent->tenant_id, 'calendar', 'delete');
     }
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -59,7 +59,7 @@ const localColumns = ref<KanbanColumn[]>(cloneColumns(props.columns));
 const draggingDealId = ref<number | null>(null);
 const dragSourceStage = ref<string | null>(null);
 const dropTargetStage = ref<string | null>(null);
-const isSaving = ref(false);
+const pendingUpdates = ref(0);
 
 watch(
     () => props.columns,
@@ -118,7 +118,6 @@ function updateColumnStats(stage: string): void {
 
 function moveDealLocally(dealId: number, toStage: string): boolean {
     let sourceColumn: KanbanColumn | undefined;
-    let targetColumn: KanbanColumn | undefined;
     let dealIndex = -1;
 
     for (const column of localColumns.value) {
@@ -131,7 +130,7 @@ function moveDealLocally(dealId: number, toStage: string): boolean {
         }
     }
 
-    targetColumn = localColumns.value.find((column) => column.stage === toStage);
+    const targetColumn = localColumns.value.find((column) => column.stage === toStage);
 
     if (!sourceColumn || !targetColumn || dealIndex === -1) {
         return false;
@@ -156,6 +155,51 @@ function clearDragState(): void {
     draggingDealId.value = null;
     dragSourceStage.value = null;
     dropTargetStage.value = null;
+}
+
+function csrfToken(): string {
+    const token = document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null;
+
+    return token?.content ?? '';
+}
+
+function findDealStage(dealId: number): string | null {
+    for (const column of localColumns.value) {
+        if (column.deals.some((deal) => deal.id === dealId)) {
+            return column.stage;
+        }
+    }
+
+    return null;
+}
+
+async function persistStageChange(dealId: number, fromStage: string, toStage: string): Promise<void> {
+    pendingUpdates.value += 1;
+
+    try {
+        const response = await fetch(`/deals/${dealId}/stage`, {
+            method: 'PATCH',
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken(),
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: JSON.stringify({ stage: toStage }),
+        });
+
+        if (!response.ok) {
+            throw new Error('failed to persist stage change');
+        }
+    } catch {
+        const currentStage = findDealStage(dealId);
+
+        if (currentStage === toStage) {
+            moveDealLocally(dealId, fromStage);
+        }
+    } finally {
+        pendingUpdates.value = Math.max(0, pendingUpdates.value - 1);
+    }
 }
 
 function onDragStart(event: DragEvent, dealId: number, stage: string): void {
@@ -186,10 +230,6 @@ function onDragLeave(stage: string): void {
 function onDrop(event: DragEvent, stage: string): void {
     event.preventDefault();
 
-    if (isSaving.value) {
-        return;
-    }
-
     const dealId = draggingDealId.value;
     const sourceStage = dragSourceStage.value;
 
@@ -198,7 +238,6 @@ function onDrop(event: DragEvent, stage: string): void {
         return;
     }
 
-    const snapshot = cloneColumns(localColumns.value);
     const moved = moveDealLocally(dealId, stage);
 
     if (!moved) {
@@ -206,23 +245,8 @@ function onDrop(event: DragEvent, stage: string): void {
         return;
     }
 
-    isSaving.value = true;
-
-    router.patch(
-        `/deals/${dealId}/stage`,
-        { stage },
-        {
-            preserveScroll: true,
-            preserveState: true,
-            onError: () => {
-                localColumns.value = snapshot;
-            },
-            onFinish: () => {
-                isSaving.value = false;
-                clearDragState();
-            },
-        },
-    );
+    clearDragState();
+    void persistStageChange(dealId, sourceStage, stage);
 }
 </script>
 
@@ -287,7 +311,9 @@ function onDrop(event: DragEvent, stage: string): void {
                         </p>
                     </div>
                     <div class="flex items-center gap-3">
-                        <span v-if="isSaving" class="text-xs text-muted-foreground">A atualizar etapa...</span>
+                        <span v-if="pendingUpdates > 0" class="text-xs text-muted-foreground">
+                            A atualizar etapa{{ pendingUpdates > 1 ? 's' : '' }}...
+                        </span>
                         <Button as-child>
                             <Link href="/deals/create">Criar negócio</Link>
                         </Button>

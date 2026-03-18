@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnsureActiveTenant;
+use App\Http\Middleware\EnsureModulePermission;
 use App\Http\Middleware\EnsureTenantFeature;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -24,6 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'tenant.active' => EnsureActiveTenant::class,
             'tenant.feature' => EnsureTenantFeature::class,
+            'module.permission' => EnsureModulePermission::class,
         ]);
 
         $middleware->web(append: [

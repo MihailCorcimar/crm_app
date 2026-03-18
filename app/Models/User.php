@@ -128,4 +128,26 @@ class User extends Authenticatable
             })
             ->exists();
     }
+
+    public function hasModulePermission(string $module, string $action): bool
+    {
+        if (! $this->exists) {
+            return false;
+        }
+
+        // Fallback for existing users without group assignment.
+        if (! is_numeric($this->permission_group_id)) {
+            return true;
+        }
+
+        $group = $this->relationLoaded('permissionGroup')
+            ? $this->permissionGroup
+            : $this->permissionGroup()->first();
+
+        if (! $group instanceof PermissionGroup) {
+            return true;
+        }
+
+        return $group->allows($module, $action);
+    }
 }

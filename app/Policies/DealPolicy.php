@@ -12,26 +12,26 @@ class DealPolicy
 
     public function viewAny(User $user): bool
     {
-        return $this->canAccessActiveTenant($user);
+        return $this->canAccessActiveTenant($user, 'deals', 'read');
     }
 
     public function view(User $user, Deal $deal): bool
     {
-        return $this->canAccessTenantRecord($user, (int) $deal->tenant_id);
+        return $this->canAccessTenantRecord($user, (int) $deal->tenant_id, 'deals', 'read');
     }
 
     public function create(User $user): bool
     {
-        return $this->canAccessActiveTenant($user);
+        return $this->canAccessActiveTenant($user, 'deals', 'create');
     }
 
     public function update(User $user, Deal $deal): bool
     {
-        return $this->canAccessTenantRecord($user, (int) $deal->tenant_id);
+        return $this->canAccessTenantRecord($user, (int) $deal->tenant_id, 'deals', 'update');
     }
 
     public function delete(User $user, Deal $deal): bool
     {
-        return $this->canAccessTenantRecord($user, (int) $deal->tenant_id);
+        return $this->canAccessTenantRecord($user, (int) $deal->tenant_id, 'deals', 'delete');
     }
 }

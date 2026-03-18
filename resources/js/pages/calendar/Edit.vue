@@ -10,6 +10,10 @@ type SelectOption = {
     name: string;
 };
 
+type RelatedSelectOption = SelectOption & {
+    entity_id: number | null;
+};
+
 type EventableTypeOption = {
     value: 'entity' | 'person' | 'deal';
     label: string;
@@ -38,8 +42,8 @@ const props = defineProps<{
     owners: SelectOption[];
     eventableTypes: EventableTypeOption[];
     entities: SelectOption[];
-    people: SelectOption[];
-    deals: SelectOption[];
+    people: RelatedSelectOption[];
+    deals: RelatedSelectOption[];
     types: SelectOption[];
     actions: SelectOption[];
 }>();

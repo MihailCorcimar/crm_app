@@ -1,13 +1,13 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { CalendarDays, History, Mail, NotebookTabs } from 'lucide-vue-next';
+import { computed, onBeforeUnmount, onMounted, ref, type Component, watch } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { CalendarDays, History, Mail, NotebookTabs } from 'lucide-vue-next';
-import { computed, onBeforeUnmount, onMounted, ref, type Component, watch } from 'vue';
 
 type DealShowPayload = {
     id: number;
@@ -39,6 +39,12 @@ type QuickActivityType = {
 type OwnerOption = {
     id: number;
     name: string;
+};
+
+type ProposalEmailRecipient = {
+    email: string;
+    label: string;
+    greeting_name: string;
 };
 
 type ProductOption = {
@@ -95,6 +101,7 @@ const props = defineProps<{
         subject: string;
         body: string;
     };
+    proposalEmailRecipients: ProposalEmailRecipient[];
     followUp: {
         active: boolean;
         next_send_at: string | null;
@@ -140,6 +147,12 @@ const emailProposalForm = useForm({
     body: props.proposalEmailDefaults.body,
 });
 
+const CUSTOM_EMAIL_OPTION = '__custom__';
+const proposalEmailRecipients = computed(() => props.proposalEmailRecipients);
+const hasEmailRecipientOptions = computed(() => proposalEmailRecipients.value.length > 0);
+const selectedProposalRecipient = ref<string>('');
+const customProposalEmail = ref<string>('');
+
 const proposalInput = ref<HTMLInputElement | null>(null);
 const emailConfirmation = ref<string>('');
 const followUpFeedback = ref<string>('');
@@ -181,6 +194,96 @@ watch(
         timelineItems.value = [...incoming];
     },
 );
+
+function initializeProposalRecipientSelection(): void {
+    const currentEmail = emailProposalForm.to_email.trim();
+
+    if (!hasEmailRecipientOptions.value) {
+        selectedProposalRecipient.value = CUSTOM_EMAIL_OPTION;
+        customProposalEmail.value = currentEmail;
+
+        return;
+    }
+
+    const match = proposalEmailRecipients.value.find((recipient) => recipient.email === currentEmail);
+
+    if (match !== undefined) {
+        selectedProposalRecipient.value = match.email;
+        customProposalEmail.value = '';
+
+        return;
+    }
+
+    if (currentEmail !== '') {
+        selectedProposalRecipient.value = CUSTOM_EMAIL_OPTION;
+        customProposalEmail.value = currentEmail;
+
+        return;
+    }
+
+    selectedProposalRecipient.value = '';
+    customProposalEmail.value = '';
+}
+
+function currentGreetingName(): string {
+    if (selectedProposalRecipient.value === CUSTOM_EMAIL_OPTION) {
+        return props.deal.entity ?? 'cliente';
+    }
+
+    const selected = proposalEmailRecipients.value.find((recipient) => recipient.email === selectedProposalRecipient.value);
+
+    if (selected !== undefined) {
+        return selected.greeting_name;
+    }
+
+    return props.deal.entity ?? 'cliente';
+}
+
+function updateProposalBodyGreeting(name: string): void {
+    const safeName = name.trim() !== '' ? name.trim() : 'cliente';
+    const lines = emailProposalForm.body.split('\n');
+
+    if (lines.length === 0) {
+        emailProposalForm.body = `Olá ${safeName},`;
+
+        return;
+    }
+
+    lines[0] = `Olá ${safeName},`;
+    emailProposalForm.body = lines.join('\n');
+}
+
+initializeProposalRecipientSelection();
+updateProposalBodyGreeting(currentGreetingName());
+
+watch(
+    [proposalEmailRecipients, hasEmailRecipientOptions],
+    () => {
+        initializeProposalRecipientSelection();
+        updateProposalBodyGreeting(currentGreetingName());
+    },
+    { deep: true },
+);
+
+watch(selectedProposalRecipient, (value) => {
+    if (value === CUSTOM_EMAIL_OPTION) {
+        emailProposalForm.to_email = customProposalEmail.value.trim();
+        updateProposalBodyGreeting(currentGreetingName());
+
+        return;
+    }
+
+    emailProposalForm.to_email = value;
+    updateProposalBodyGreeting(currentGreetingName());
+});
+
+watch(customProposalEmail, (value) => {
+    if (selectedProposalRecipient.value !== CUSTOM_EMAIL_OPTION) {
+        return;
+    }
+
+    emailProposalForm.to_email = value.trim();
+});
 
 function stageLabel(stage: string): string {
     const map: Record<string, string> = {
@@ -494,16 +597,16 @@ onBeforeUnmount(() => {
                     </div>
                 </CardHeader>
                 <CardContent>
-                    <dl class="grid gap-4 md:grid-cols-2">
-                        <div><dt class="text-sm text-muted-foreground">Título</dt><dd>{{ deal.title }}</dd></div>
-                        <div><dt class="text-sm text-muted-foreground">Entidade</dt><dd>{{ deal.entity || '-' }}</dd></div>
-                        <div><dt class="text-sm text-muted-foreground">Etapa</dt><dd>{{ stageLabel(deal.stage) }}</dd></div>
-                        <div><dt class="text-sm text-muted-foreground">Valor</dt><dd>{{ deal.value.toFixed(2) }} EUR</dd></div>
-                        <div><dt class="text-sm text-muted-foreground">Probabilidade</dt><dd>{{ deal.probability }}%</dd></div>
-                        <div><dt class="text-sm text-muted-foreground">Fecho previsto</dt><dd>{{ deal.expected_close_date || '-' }}</dd></div>
-                        <div><dt class="text-sm text-muted-foreground">Responsável</dt><dd>{{ deal.owner || '-' }}</dd></div>
-                        <div><dt class="text-sm text-muted-foreground">Criado em</dt><dd>{{ deal.created_at || '-' }}</dd></div>
-                        <div><dt class="text-sm text-muted-foreground">Atualizado em</dt><dd>{{ deal.updated_at || '-' }}</dd></div>
+                    <dl class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                        <div class="rounded-lg border bg-zinc-50/50 p-3"><dt class="text-xs font-medium text-muted-foreground">Titulo</dt><dd class="mt-1 text-sm font-medium">{{ deal.title }}</dd></div>
+                        <div class="rounded-lg border bg-zinc-50/50 p-3"><dt class="text-xs font-medium text-muted-foreground">Entidade</dt><dd class="mt-1 text-sm font-medium">{{ deal.entity || '-' }}</dd></div>
+                        <div class="rounded-lg border bg-zinc-50/50 p-3"><dt class="text-xs font-medium text-muted-foreground">Etapa</dt><dd class="mt-1 text-sm font-medium">{{ stageLabel(deal.stage) }}</dd></div>
+                        <div class="rounded-lg border bg-zinc-50/50 p-3"><dt class="text-xs font-medium text-muted-foreground">Valor</dt><dd class="mt-1 text-sm font-medium">{{ deal.value.toFixed(2) }} EUR</dd></div>
+                        <div class="rounded-lg border bg-zinc-50/50 p-3"><dt class="text-xs font-medium text-muted-foreground">Probabilidade</dt><dd class="mt-1 text-sm font-medium">{{ deal.probability }}%</dd></div>
+                        <div class="rounded-lg border bg-zinc-50/50 p-3"><dt class="text-xs font-medium text-muted-foreground">Fecho previsto</dt><dd class="mt-1 text-sm font-medium">{{ deal.expected_close_date || '-' }}</dd></div>
+                        <div class="rounded-lg border bg-zinc-50/50 p-3"><dt class="text-xs font-medium text-muted-foreground">Responsavel</dt><dd class="mt-1 text-sm font-medium">{{ deal.owner || '-' }}</dd></div>
+                        <div class="rounded-lg border bg-zinc-50/50 p-3"><dt class="text-xs font-medium text-muted-foreground">Criado em</dt><dd class="mt-1 text-sm font-medium">{{ deal.created_at || '-' }}</dd></div>
+                        <div class="rounded-lg border bg-zinc-50/50 p-3"><dt class="text-xs font-medium text-muted-foreground">Atualizado em</dt><dd class="mt-1 text-sm font-medium">{{ deal.updated_at || '-' }}</dd></div>
                     </dl>
                 </CardContent>
             </Card>
@@ -512,8 +615,8 @@ onBeforeUnmount(() => {
                 <CardHeader>
                     <CardTitle>Proposta</CardTitle>
                 </CardHeader>
-                <CardContent class="space-y-4">
-                    <div v-if="deal.proposal.has_file" class="rounded-md border p-3 text-sm">
+                <CardContent class="space-y-5">
+                    <div v-if="deal.proposal.has_file" class="rounded-lg border bg-zinc-50/40 p-4 text-sm">
                         <p><span class="font-medium">Ficheiro:</span> {{ deal.proposal.file_name || '-' }}</p>
                         <p><span class="font-medium">Tamanho:</span> {{ deal.proposal.size_label || '-' }}</p>
                         <p><span class="font-medium">Enviado em:</span> {{ deal.proposal.uploaded_at || '-' }}</p>
@@ -525,11 +628,9 @@ onBeforeUnmount(() => {
                             </Button>
                         </div>
                     </div>
-                    <p v-else class="text-sm text-muted-foreground">
-                        Ainda não existe proposta carregada para este negócio.
-                    </p>
+                    <div v-else class="rounded-lg border border-dashed bg-zinc-50/30 p-4 text-sm text-muted-foreground">Ainda não existe proposta carregada para este negócio.</div>
 
-                    <form class="grid gap-3 md:grid-cols-[1fr_auto]" @submit.prevent="submitProposal">
+                    <form class="grid gap-3 rounded-xl border bg-zinc-50/40 p-3 md:grid-cols-[1fr_auto]" @submit.prevent="submitProposal">
                         <div class="grid gap-2">
                             <label class="text-sm font-medium">Carregar proposta</label>
                             <input
@@ -539,7 +640,7 @@ onBeforeUnmount(() => {
                                 accept=".pdf,.doc,.docx,.odt"
                                 @change="onProposalSelected"
                             />
-                            <div class="flex h-10 items-center gap-2 rounded-md border px-2">
+                            <div class="flex h-11 items-center gap-2 rounded-lg border bg-background px-2">
                                 <Button type="button" variant="outline" @click="openProposalPicker">
                                     Escolher ficheiro
                                 </Button>
@@ -556,14 +657,40 @@ onBeforeUnmount(() => {
                         </div>
                     </form>
 
-                    <div class="border-t pt-4">
+                    <div class="rounded-xl border bg-zinc-50/40 p-4">
                         <h3 class="text-base font-semibold">Enviar proposta ao cliente</h3>
                         <p class="mt-1 text-sm text-muted-foreground">O texto de email é editável antes do envio.</p>
 
                         <form class="mt-3 grid gap-3" @submit.prevent="sendProposalByEmail">
                             <div class="grid gap-2">
                                 <label class="text-sm font-medium">Email do cliente</label>
-                                <Input v-model="emailProposalForm.to_email" type="email" placeholder="cliente@empresa.pt" />
+                                <select
+                                    v-if="hasEmailRecipientOptions"
+                                    v-model="selectedProposalRecipient"
+                                    class="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-10 w-full rounded-lg border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none"
+                                >
+                                    <option value="">Selecionar email</option>
+                                    <option
+                                        v-for="recipient in proposalEmailRecipients"
+                                        :key="recipient.email"
+                                        :value="recipient.email"
+                                    >
+                                        {{ recipient.label }}
+                                    </option>
+                                    <option :value="CUSTOM_EMAIL_OPTION">Outro email...</option>
+                                </select>
+                                <Input
+                                    v-if="!hasEmailRecipientOptions || selectedProposalRecipient === CUSTOM_EMAIL_OPTION"
+                                    v-model="customProposalEmail"
+                                    type="email"
+                                    placeholder="cliente@empresa.pt"
+                                />
+                                <p v-if="hasEmailRecipientOptions" class="text-xs text-muted-foreground">
+                                    Lista de emails da entidade e das pessoas de contacto associadas. Podes escolher "Outro email..." para introduzir manualmente.
+                                </p>
+                                <p v-else class="text-xs text-muted-foreground">
+                                    Não existem emails associados. Introduz manualmente o email do cliente.
+                                </p>
                                 <p v-if="emailProposalForm.errors.to_email" class="text-destructive text-sm">{{ emailProposalForm.errors.to_email }}</p>
                             </div>
 
@@ -577,7 +704,7 @@ onBeforeUnmount(() => {
                                 <label class="text-sm font-medium">Mensagem</label>
                                 <textarea
                                     v-model="emailProposalForm.body"
-                                    class="border-input bg-background ring-offset-background min-h-28 w-full rounded-md border px-3 py-2 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none"
+                                    class="border-input bg-background ring-offset-background min-h-36 w-full rounded-lg border px-3 py-2 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none"
                                 />
                                 <p v-if="emailProposalForm.errors.body" class="text-destructive text-sm">{{ emailProposalForm.errors.body }}</p>
                             </div>
@@ -604,16 +731,19 @@ onBeforeUnmount(() => {
             </Card>
 
             <Card>
-                <CardHeader>
+                <CardHeader class="flex flex-row items-center justify-between">
                     <CardTitle>Produtos do negócio</CardTitle>
+                    <div class="rounded-full border bg-zinc-50 px-3 py-1 text-xs font-medium text-muted-foreground">
+                        Total: {{ formatCurrency(totalProductsValue) }}
+                    </div>
                 </CardHeader>
                 <CardContent class="space-y-4">
-                    <form class="grid gap-3 md:grid-cols-[1fr_140px_140px_auto]" @submit.prevent="addProductToDeal">
+                    <form class="grid gap-3 rounded-xl border bg-zinc-50/40 p-3 md:grid-cols-[1fr_140px_140px_auto]" @submit.prevent="addProductToDeal">
                         <div class="grid gap-2">
                             <label class="text-sm font-medium">Produto</label>
                             <select
                                 v-model="productForm.item_id"
-                                class="border-input bg-background ring-offset-background flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none"
+                                class="border-input bg-background ring-offset-background flex h-10 w-full rounded-lg border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none"
                             >
                                 <option :value="''">Selecionar produto</option>
                                 <option v-for="item in productOptions" :key="item.id" :value="item.id">
@@ -650,7 +780,7 @@ onBeforeUnmount(() => {
                     </div>
 
                     <div v-else class="space-y-3">
-                        <div class="overflow-x-auto rounded-md border">
+                        <div class="overflow-x-auto rounded-lg border bg-background">
                             <table class="min-w-full text-sm">
                                 <thead class="bg-muted/50">
                                     <tr>
@@ -662,7 +792,7 @@ onBeforeUnmount(() => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr v-for="line in dealProducts" :key="line.id" class="border-t">
+                                    <tr v-for="line in dealProducts" :key="line.id" class="border-t odd:bg-zinc-50/30">
                                         <td class="px-3 py-2">
                                             <div class="font-medium">{{ line.item_name }}</div>
                                             <div v-if="line.item_reference" class="text-xs text-muted-foreground">{{ line.item_reference }}</div>
@@ -679,10 +809,6 @@ onBeforeUnmount(() => {
                                 </tbody>
                             </table>
                         </div>
-
-                        <p class="text-sm text-muted-foreground">
-                            Total de produtos no negócio: {{ formatCurrency(totalProductsValue) }}
-                        </p>
                     </div>
                 </CardContent>
             </Card>
@@ -698,7 +824,7 @@ onBeforeUnmount(() => {
                             <label class="text-sm font-medium">Tipo</label>
                             <select
                                 v-model="quickForm.activity_type"
-                                class="border-input bg-background ring-offset-background flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none"
+                                class="border-input bg-background ring-offset-background flex h-10 w-full rounded-lg border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none"
                             >
                                 <option v-for="type in quickActivityTypes" :key="type.value" :value="type.value">
                                     {{ type.label }}
@@ -717,7 +843,7 @@ onBeforeUnmount(() => {
                             <label class="text-sm font-medium">Responsável</label>
                             <select
                                 v-model="quickForm.owner_id"
-                                class="border-input bg-background ring-offset-background flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none"
+                                class="border-input bg-background ring-offset-background flex h-10 w-full rounded-lg border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none"
                             >
                                 <option :value="''">Selecionar responsável</option>
                                 <option v-for="owner in owners" :key="owner.id" :value="owner.id">
@@ -935,6 +1061,11 @@ onBeforeUnmount(() => {
         </div>
     </AppLayout>
 </template>
+
+
+
+
+
 
 
 

@@ -1,10 +1,10 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
+import { Head, Link, router } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link } from '@inertiajs/vue3';
-import { ref } from 'vue';
 
 type EnabledField = {
     key: string;
@@ -13,19 +13,44 @@ type EnabledField = {
     required: boolean;
 };
 
+type ConversionSettings = {
+    create_deal: boolean;
+    entity_name_field_key: string | null;
+    deal_title_field_key: string | null;
+    deal_title_template: string;
+    deal_value_field_key: string | null;
+    deal_stage: string;
+    deal_owner_id: number | null;
+    deal_probability: number;
+};
+
 type SubmissionRow = {
     id: number;
+    status: 'new' | 'converted' | 'ignored';
     contact: {
         id: number;
         name: string;
         email: string | null;
+    } | null;
+    entity: {
+        id: number;
+        name: string;
+    } | null;
+    deal: {
+        id: number;
+        title: string;
+        stage: string;
     } | null;
     source_type: string;
     source_url: string | null;
     source_origin: string | null;
     ip_address: string | null;
     submitted_at: string | null;
-    payload: Record<string, string | null>;
+    converted_at: string | null;
+    converted_by: string | null;
+    ignored_at: string | null;
+    ignored_by: string | null;
+    payload: Record<string, unknown>;
 };
 
 type SubmissionPaginator = {
@@ -46,6 +71,7 @@ const props = defineProps<{
         requires_captcha: boolean;
         confirmation_message: string;
         enabled_fields: EnabledField[];
+        conversion_settings: ConversionSettings;
         public_url: string;
         embed_iframe_code: string;
         embed_script_code: string;
@@ -54,7 +80,7 @@ const props = defineProps<{
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Formulários públicos', href: '/lead-forms' },
+    { title: 'Formularios publicos', href: '/lead-forms' },
     { title: props.leadForm.name, href: `/lead-forms/${props.leadForm.id}` },
 ];
 
@@ -65,6 +91,10 @@ const copyStatus = ref<Record<CopyKind, CopyState>>({
     iframe: 'idle',
     script: 'idle',
 });
+
+const runningSubmissionId = ref<number | null>(null);
+
+const hasSubmissions = computed(() => props.submissions.data.length > 0);
 
 function fallbackCopy(text: string): boolean {
     const textarea = document.createElement('textarea');
@@ -99,23 +129,89 @@ async function copySnippet(kind: CopyKind): Promise<void> {
             return;
         }
     } catch {
-        // Fallback para contexto não seguro (HTTP).
+        // Fallback para contexto HTTP.
     }
 
     const copied = fallbackCopy(text);
     setCopyStatus(kind, copied ? 'copied' : 'error');
 }
 
-function prettyPayload(payload: Record<string, string | null>): string {
+function statusLabel(status: SubmissionRow['status']): string {
+    if (status === 'converted') return 'Convertida';
+    if (status === 'ignored') return 'Ignorada';
+
+    return 'Nova';
+}
+
+function statusClass(status: SubmissionRow['status']): string {
+    if (status === 'converted') return 'bg-emerald-100 text-emerald-800';
+    if (status === 'ignored') return 'bg-zinc-200 text-zinc-700';
+
+    return 'bg-amber-100 text-amber-800';
+}
+
+function toDisplayValue(value: unknown): string {
+    if (value === null || value === undefined) return '';
+    if (typeof value === 'boolean') return value ? 'Sim' : 'Nao';
+    if (Array.isArray(value)) return value.map((item) => String(item)).join(', ');
+
+    return String(value);
+}
+
+function prettyPayload(payload: Record<string, unknown>): string {
     return Object.entries(payload)
-        .filter(([, value]) => value !== null && value !== '')
-        .map(([key, value]) => `${key}: ${value}`)
+        .map(([key, value]) => `${key}: ${toDisplayValue(value)}`)
+        .filter((row) => row.trim() !== '' && !row.endsWith(': '))
         .join(' | ');
+}
+
+function convertSubmission(submission: SubmissionRow): void {
+    if (submission.status === 'converted') {
+        return;
+    }
+
+    if (!window.confirm('Converter esta submissao agora?')) {
+        return;
+    }
+
+    runningSubmissionId.value = submission.id;
+    router.post(
+        `/lead-forms/${props.leadForm.id}/submissions/${submission.id}/convert`,
+        {},
+        {
+            preserveScroll: true,
+            onFinish: () => {
+                runningSubmissionId.value = null;
+            },
+        },
+    );
+}
+
+function ignoreSubmission(submission: SubmissionRow): void {
+    if (submission.status === 'ignored') {
+        return;
+    }
+
+    if (!window.confirm('Marcar esta submissao como ignorada?')) {
+        return;
+    }
+
+    runningSubmissionId.value = submission.id;
+    router.patch(
+        `/lead-forms/${props.leadForm.id}/submissions/${submission.id}/ignore`,
+        {},
+        {
+            preserveScroll: true,
+            onFinish: () => {
+                runningSubmissionId.value = null;
+            },
+        },
+    );
 }
 </script>
 
 <template>
-    <Head :title="`Formulário - ${leadForm.name}`" />
+    <Head :title="`Formulario - ${leadForm.name}`" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
@@ -127,7 +223,7 @@ function prettyPayload(payload: Record<string, string | null>): string {
                             <Link :href="`/lead-forms/${leadForm.id}/edit`">Editar</Link>
                         </Button>
                         <Button as-child variant="outline">
-                            <a :href="leadForm.public_url" target="_blank" rel="noopener noreferrer">Abrir público</a>
+                            <a :href="leadForm.public_url" target="_blank" rel="noopener noreferrer">Abrir publico</a>
                         </Button>
                     </div>
                 </CardHeader>
@@ -138,8 +234,8 @@ function prettyPayload(payload: Record<string, string | null>): string {
                             <div class="font-medium">{{ leadForm.status === 'active' ? 'Ativo' : 'Inativo' }}</div>
                         </div>
                         <div class="rounded-md border p-3">
-                            <div class="text-sm text-muted-foreground">Captcha obrigatório</div>
-                            <div class="font-medium">{{ leadForm.requires_captcha ? 'Sim' : 'Não' }}</div>
+                            <div class="text-sm text-muted-foreground">Captcha obrigatorio</div>
+                            <div class="font-medium">{{ leadForm.requires_captcha ? 'Sim' : 'Nao' }}</div>
                         </div>
                     </div>
 
@@ -157,15 +253,25 @@ function prettyPayload(payload: Record<string, string | null>): string {
                     </div>
 
                     <div class="rounded-md border p-3">
-                        <p class="text-sm font-medium">Mensagem de confirmação</p>
+                        <p class="text-sm font-medium">Mensagem de confirmacao</p>
                         <p class="mt-1 text-sm text-muted-foreground">{{ leadForm.confirmation_message }}</p>
+                    </div>
+
+                    <div class="rounded-md border p-3">
+                        <p class="text-sm font-medium">Conversao configurada</p>
+                        <div class="mt-2 grid gap-2 text-sm text-muted-foreground md:grid-cols-2">
+                            <div>Criar negocio: {{ leadForm.conversion_settings.create_deal ? 'Sim' : 'Nao' }}</div>
+                            <div>Etapa inicial: {{ leadForm.conversion_settings.deal_stage }}</div>
+                            <div>Probabilidade inicial: {{ leadForm.conversion_settings.deal_probability }}%</div>
+                            <div>Template titulo: {{ leadForm.conversion_settings.deal_title_template }}</div>
+                        </div>
                     </div>
                 </CardContent>
             </Card>
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Código de incorporação</CardTitle>
+                    <CardTitle>Codigo de incorporacao</CardTitle>
                 </CardHeader>
                 <CardContent class="space-y-4">
                     <div class="space-y-2">
@@ -191,7 +297,7 @@ function prettyPayload(payload: Record<string, string | null>): string {
                             class="text-xs"
                             :class="copyStatus.iframe === 'copied' ? 'text-emerald-600' : 'text-red-600'"
                         >
-                            {{ copyStatus.iframe === 'copied' ? 'Código copiado para a área de transferência.' : 'Não foi possível copiar automaticamente.' }}
+                            {{ copyStatus.iframe === 'copied' ? 'Codigo copiado para a area de transferencia.' : 'Nao foi possivel copiar automaticamente.' }}
                         </p>
                         <textarea
                             readonly
@@ -224,7 +330,7 @@ function prettyPayload(payload: Record<string, string | null>): string {
                             class="text-xs"
                             :class="copyStatus.script === 'copied' ? 'text-emerald-600' : 'text-red-600'"
                         >
-                            {{ copyStatus.script === 'copied' ? 'Código copiado para a área de transferência.' : 'Não foi possível copiar automaticamente.' }}
+                            {{ copyStatus.script === 'copied' ? 'Codigo copiado para a area de transferencia.' : 'Nao foi possivel copiar automaticamente.' }}
                         </p>
                         <textarea
                             readonly
@@ -238,11 +344,11 @@ function prettyPayload(payload: Record<string, string | null>): string {
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Submissões</CardTitle>
+                    <CardTitle>Submissoes</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <div v-if="submissions.data.length === 0" class="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-                        Sem submissões ainda.
+                    <div v-if="!hasSubmissions" class="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                        Sem submissoes ainda.
                     </div>
 
                     <template v-else>
@@ -251,23 +357,53 @@ function prettyPayload(payload: Record<string, string | null>): string {
                                 <thead class="bg-muted/50">
                                     <tr>
                                         <th class="px-3 py-2 text-left font-medium">Data</th>
-                                        <th class="px-3 py-2 text-left font-medium">Lead criada</th>
+                                        <th class="px-3 py-2 text-left font-medium">Estado</th>
+                                        <th class="px-3 py-2 text-left font-medium">Registos</th>
                                         <th class="px-3 py-2 text-left font-medium">Origem</th>
-                                        <th class="px-3 py-2 text-left font-medium">IP</th>
                                         <th class="px-3 py-2 text-left font-medium">Dados</th>
+                                        <th class="px-3 py-2 text-right font-medium">Acoes</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr v-for="submission in submissions.data" :key="submission.id" class="border-t">
+                                    <tr v-for="submission in submissions.data" :key="submission.id" class="border-t align-top">
                                         <td class="px-3 py-2">{{ submission.submitted_at || '-' }}</td>
                                         <td class="px-3 py-2">
-                                            <div v-if="submission.contact">
-                                                <Link :href="`/people/${submission.contact.id}`" class="font-medium text-blue-700 underline">
-                                                    {{ submission.contact.name }}
-                                                </Link>
-                                                <div class="text-xs text-muted-foreground">{{ submission.contact.email || '-' }}</div>
+                                            <span class="inline-flex rounded-full px-2 py-1 text-xs font-medium" :class="statusClass(submission.status)">
+                                                {{ statusLabel(submission.status) }}
+                                            </span>
+                                            <div v-if="submission.converted_at" class="mt-1 text-xs text-muted-foreground">
+                                                Convertida em {{ submission.converted_at }} por {{ submission.converted_by || '-' }}
                                             </div>
-                                            <span v-else>-</span>
+                                            <div v-if="submission.ignored_at" class="mt-1 text-xs text-muted-foreground">
+                                                Ignorada em {{ submission.ignored_at }} por {{ submission.ignored_by || '-' }}
+                                            </div>
+                                        </td>
+                                        <td class="px-3 py-2">
+                                            <div v-if="submission.contact">
+                                                <span class="text-xs text-muted-foreground">Pessoa</span>
+                                                <div>
+                                                    <Link :href="`/people/${submission.contact.id}`" class="font-medium text-blue-700 underline">
+                                                        {{ submission.contact.name }}
+                                                    </Link>
+                                                </div>
+                                            </div>
+                                            <div v-if="submission.entity" class="mt-1">
+                                                <span class="text-xs text-muted-foreground">Entidade</span>
+                                                <div>
+                                                    <Link :href="`/entities/${submission.entity.id}`" class="font-medium text-blue-700 underline">
+                                                        {{ submission.entity.name }}
+                                                    </Link>
+                                                </div>
+                                            </div>
+                                            <div v-if="submission.deal" class="mt-1">
+                                                <span class="text-xs text-muted-foreground">Negocio</span>
+                                                <div>
+                                                    <Link :href="`/deals/${submission.deal.id}`" class="font-medium text-blue-700 underline">
+                                                        {{ submission.deal.title }}
+                                                    </Link>
+                                                </div>
+                                            </div>
+                                            <span v-if="!submission.contact && !submission.entity && !submission.deal">-</span>
                                         </td>
                                         <td class="px-3 py-2">
                                             <div>{{ submission.source_type }}</div>
@@ -281,9 +417,31 @@ function prettyPayload(payload: Record<string, string | null>): string {
                                             >
                                                 link
                                             </a>
+                                            <div class="mt-1 text-xs text-muted-foreground">IP: {{ submission.ip_address || '-' }}</div>
                                         </td>
-                                        <td class="px-3 py-2">{{ submission.ip_address || '-' }}</td>
-                                        <td class="px-3 py-2">{{ prettyPayload(submission.payload) || '-' }}</td>
+                                        <td class="max-w-sm px-3 py-2 text-xs text-muted-foreground">
+                                            {{ prettyPayload(submission.payload) || '-' }}
+                                        </td>
+                                        <td class="px-3 py-2 text-right">
+                                            <div class="flex justify-end gap-2">
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    :disabled="runningSubmissionId === submission.id || submission.status === 'converted'"
+                                                    @click="convertSubmission(submission)"
+                                                >
+                                                    Converter
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    :disabled="runningSubmissionId === submission.id || submission.status === 'ignored'"
+                                                    @click="ignoreSubmission(submission)"
+                                                >
+                                                    Ignorar
+                                                </Button>
+                                            </div>
+                                        </td>
                                     </tr>
                                 </tbody>
                             </table>

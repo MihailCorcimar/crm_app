@@ -90,9 +90,9 @@
 }
 
 :root {
-    --background: hsl(0 0% 100%);
+    --background: hsl(160 25% 98%);
     --foreground: hsl(0 0% 3.9%);
-    --card: hsl(0 0% 100%);
+    --card: hsl(0 0% 100% / 0.95);
     --card-foreground: hsl(0 0% 3.9%);
     --popover: hsl(0 0% 100%);
     --popover-foreground: hsl(0 0% 3.9%);
@@ -106,22 +106,22 @@
     --accent-foreground: hsl(0 0% 9%);
     --destructive: hsl(0 84.2% 60.2%);
     --destructive-foreground: hsl(0 0% 98%);
-    --border: hsl(0 0% 92.8%);
-    --input: hsl(0 0% 89.8%);
+    --border: hsl(160 16% 86%);
+    --input: hsl(160 12% 84%);
     --ring: hsl(0 0% 3.9%);
     --chart-1: hsl(12 76% 61%);
     --chart-2: hsl(173 58% 39%);
     --chart-3: hsl(197 37% 24%);
     --chart-4: hsl(43 74% 66%);
     --chart-5: hsl(27 87% 67%);
-    --radius: 0.5rem;
-    --sidebar-background: hsl(0 0% 98%);
-    --sidebar-foreground: hsl(240 5.3% 26.1%);
-    --sidebar-primary: hsl(0 0% 10%);
+    --radius: 0.75rem;
+    --sidebar-background: hsl(0 0% 100% / 0.88);
+    --sidebar-foreground: hsl(222 18% 22%);
+    --sidebar-primary: hsl(157 60% 32%);
     --sidebar-primary-foreground: hsl(0 0% 98%);
-    --sidebar-accent: hsl(0 0% 94%);
-    --sidebar-accent-foreground: hsl(0 0% 30%);
-    --sidebar-border: hsl(0 0% 91%);
+    --sidebar-accent: hsl(157 42% 94%);
+    --sidebar-accent-foreground: hsl(157 52% 24%);
+    --sidebar-border: hsl(158 21% 83%);
     --sidebar-ring: hsl(217.2 91.2% 59.8%);
     --sidebar: hsl(0 0% 98%);
 }
@@ -168,5 +168,100 @@
     }
     body {
         @apply bg-background text-foreground;
+        background-image: radial-gradient(circle at 0% 0%, hsl(151 81% 92%), transparent 35%), radial-gradient(circle at 100% 0%, hsl(197 100% 94%), transparent 30%), linear-gradient(180deg, hsl(160 35% 98%), hsl(0 0% 100%));
+        background-attachment: fixed;
+    }
+}
+@layer components {
+    [data-slot='card'] {
+        @apply border border-zinc-200/70 bg-white/85 shadow-lg shadow-emerald-900/5 backdrop-blur-sm;
+    }
+
+    [data-slot='card-header'] {
+        @apply border-b border-zinc-200/70 pb-4;
+    }
+
+    [data-slot='card-content'] {
+        @apply pt-4;
+    }
+
+    input:not([type='checkbox']):not([type='radio']),
+    select,
+    textarea {
+        @apply border-zinc-200/80 bg-white/90 shadow-sm focus-visible:border-emerald-300 focus-visible:ring-emerald-200/70;
+    }
+
+    [data-slot='badge'] {
+        @apply border;
+    }
+
+    .crm-calendar-shell {
+        @apply rounded-xl border border-emerald-100/80 bg-white/70 p-3 shadow-inner;
+    }
+
+    .crm-calendar .fc {
+        @apply text-sm;
+    }
+
+    .crm-calendar .fc .fc-toolbar.fc-header-toolbar {
+        @apply mb-4 rounded-lg bg-white/95 p-2 shadow-sm;
+    }
+
+    .crm-calendar .fc .fc-toolbar-title {
+        @apply text-3xl font-semibold tracking-tight text-zinc-900;
+    }
+
+    .crm-calendar .fc .fc-button {
+        @apply rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 shadow-sm transition;
+    }
+
+    .crm-calendar .fc .fc-button:hover {
+        @apply -translate-y-0.5 bg-zinc-50;
+    }
+
+    .crm-calendar .fc .fc-button-primary,
+    .crm-calendar .fc .fc-button-primary:not(:disabled).fc-button-active {
+        @apply border-zinc-900 bg-zinc-900 text-white;
+    }
+
+    .crm-calendar .fc .fc-daygrid-day,
+    .crm-calendar .fc .fc-timegrid-col {
+        @apply bg-white/80;
+    }
+
+    .crm-calendar .fc .fc-day-today {
+        @apply bg-amber-50/90;
+    }
+
+    .crm-calendar .fc .fc-col-header-cell {
+        @apply border-zinc-200/80 bg-zinc-50/80 py-2 text-xs uppercase tracking-wide text-zinc-600;
+    }
+
+    .crm-calendar .fc .fc-daygrid-day-number {
+        @apply text-zinc-700;
+    }
+
+    .crm-calendar .fc .fc-event {
+        @apply rounded-md border px-1.5 py-0.5 text-xs font-medium shadow-sm;
+    }
+
+    .crm-calendar .fc .crm-fc-event.crm-fc-event-upcoming {
+        @apply border-emerald-200 bg-emerald-50 text-emerald-800;
+    }
+
+    .crm-calendar .fc .crm-fc-event.crm-fc-event-today {
+        @apply border-amber-200 bg-amber-50 text-amber-800;
+    }
+
+    .crm-calendar .fc .crm-fc-event.crm-fc-event-past {
+        @apply border-zinc-200 bg-zinc-100 text-zinc-500 opacity-85;
+    }
+
+    .crm-calendar .fc .fc-event:hover {
+        @apply shadow-md;
+    }
+
+    .crm-event-tooltip {
+        @apply border-zinc-200/80 bg-white/95 shadow-xl;
     }
 }

@@ -1,9 +1,9 @@
 <script setup lang="ts">
+import { Head, useForm } from '@inertiajs/vue3';
 import DealAutomationRuleForm from '@/components/automations/DealAutomationRuleForm.vue';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { Head, useForm } from '@inertiajs/vue3';
 
 type RulePayload = {
     id: number;

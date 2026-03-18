@@ -11,6 +11,7 @@ use App\Http\Requests\DealStageRequest;
 use App\Mail\DealProposalMail;
 use App\Models\ActivityLog;
 use App\Models\CalendarEvent;
+use App\Models\Contact;
 use App\Models\Deal;
 use App\Models\DealEmailLog;
 use App\Models\DealProduct;
@@ -143,11 +144,13 @@ class DealController extends Controller
     public function show(Deal $deal): Response
     {
         $deal->load([
-            'entity:id,name',
+            'entity:id,name,email',
             'owner:id,name',
             'proposalUploader:id,name',
             'products.item:id,name,description,reference,code',
         ]);
+
+        $proposalEmailRecipients = $this->proposalEmailRecipients($deal);
 
         return Inertia::render('deals/Show', [
             'deal' => [
@@ -172,7 +175,8 @@ class DealController extends Controller
                 'activity_at' => now()->format('Y-m-d\TH:i'),
                 'owner_id' => auth()->id(),
             ],
-            'proposalEmailDefaults' => $this->proposalEmailDefaults($deal),
+            'proposalEmailDefaults' => $this->proposalEmailDefaults($deal, $proposalEmailRecipients),
+            'proposalEmailRecipients' => $proposalEmailRecipients,
             'followUp' => $this->followUpPayload($deal),
             'owners' => $this->owners(),
         ]);
@@ -308,7 +312,7 @@ class DealController extends Controller
         return to_route('deals.index');
     }
 
-    public function updateStage(DealStageRequest $request, Deal $deal): RedirectResponse
+    public function updateStage(DealStageRequest $request, Deal $deal): RedirectResponse|JsonResponse
     {
         $fromStage = $deal->stage;
         $toStage = $request->string('stage')->toString();
@@ -317,6 +321,14 @@ class DealController extends Controller
             'stage' => $toStage,
         ]);
         $this->syncFollowUpOnStageTransition($deal->fresh(), $fromStage, $toStage);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'deal_id' => (int) $deal->id,
+                'stage' => $toStage,
+            ]);
+        }
 
         return back();
     }
@@ -944,15 +956,84 @@ class DealController extends Controller
     }
 
     /**
+     * @param  array<int, array{email: string, label: string, greeting_name: string}>  $recipients
      * @return array{to_email: string, subject: string, body: string}
      */
-    private function proposalEmailDefaults(Deal $deal): array
+    private function proposalEmailDefaults(Deal $deal, array $recipients = []): array
     {
         return [
-            'to_email' => $deal->entity?->email ?? '',
+            'to_email' => $recipients[0]['email'] ?? ($deal->entity?->email ?? ''),
             'subject' => $this->defaultProposalEmailSubject($deal),
             'body' => $this->defaultProposalEmailBody($deal),
         ];
+    }
+
+    /**
+     * @return array<int, array{email: string, label: string, greeting_name: string}>
+     */
+    private function proposalEmailRecipients(Deal $deal): array
+    {
+        if ($deal->entity_id === null) {
+            return [];
+        }
+
+        $entity = Entity::query()
+            ->select(['id', 'name', 'email'])
+            ->find($deal->entity_id);
+
+        if ($entity === null) {
+            return [];
+        }
+
+        $recipients = [];
+
+        $entityEmail = trim((string) ($entity->email ?? ''));
+        if ($entityEmail !== '') {
+            $recipients[] = [
+                'email' => $entityEmail,
+                'label' => sprintf('%s (entidade) - %s', $entity->name, $entityEmail),
+                'greeting_name' => (string) $entity->name,
+            ];
+        }
+
+        $contacts = Contact::query()
+            ->select(['first_name', 'last_name', 'email'])
+            ->where('entity_id', $entity->id)
+            ->whereNotNull('email')
+            ->where('email', '!=', '')
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->get();
+
+        foreach ($contacts as $contact) {
+            $email = trim((string) ($contact->email ?? ''));
+            if ($email === '') {
+                continue;
+            }
+
+            $contactName = trim(sprintf('%s %s', (string) $contact->first_name, (string) $contact->last_name));
+            if ($contactName === '') {
+                $contactName = 'Contacto sem nome';
+            }
+
+            $recipients[] = [
+                'email' => $email,
+                'label' => sprintf('%s (contacto) - %s', $contactName, $email),
+                'greeting_name' => $contactName,
+            ];
+        }
+
+        $uniqueByEmail = [];
+        foreach ($recipients as $recipient) {
+            $key = strtolower($recipient['email']);
+            if (isset($uniqueByEmail[$key])) {
+                continue;
+            }
+
+            $uniqueByEmail[$key] = $recipient;
+        }
+
+        return array_values($uniqueByEmail);
     }
 
     private function defaultProposalEmailSubject(Deal $deal): string

@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import { Head, useForm } from '@inertiajs/vue3';
+import { computed } from 'vue';
 import DealAutomationRuleForm from '@/components/automations/DealAutomationRuleForm.vue';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { Head, useForm } from '@inertiajs/vue3';
 
 type RuleDefaults = {
     name: string;
@@ -27,17 +28,30 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Nova regra', href: '/automations/deal-rules/create' },
 ];
 
+const safeDefaults = computed<RuleDefaults>(() => props.defaults ?? {
+    name: 'Regra de inatividade',
+    inactivity_days: 7,
+    activity_type: 'task',
+    activity_due_in_days: 0,
+    activity_priority: 'medium',
+    activity_title_template: 'Follow up automático - {deal_title}',
+    activity_description_template: 'Negócio sem atividade há {days_without_activity} dias.',
+    notify_internal: true,
+    notification_message: 'Foi criada uma nova atividade automática para {deal_title}.',
+    status: 'active',
+});
+
 const form = useForm({
-    name: props.defaults.name,
-    inactivity_days: props.defaults.inactivity_days,
-    activity_type: props.defaults.activity_type,
-    activity_due_in_days: props.defaults.activity_due_in_days,
-    activity_priority: props.defaults.activity_priority,
-    activity_title_template: props.defaults.activity_title_template,
-    activity_description_template: props.defaults.activity_description_template,
-    notify_internal: props.defaults.notify_internal,
-    notification_message: props.defaults.notification_message,
-    status: props.defaults.status,
+    name: safeDefaults.value.name,
+    inactivity_days: safeDefaults.value.inactivity_days,
+    activity_type: safeDefaults.value.activity_type,
+    activity_due_in_days: safeDefaults.value.activity_due_in_days,
+    activity_priority: safeDefaults.value.activity_priority,
+    activity_title_template: safeDefaults.value.activity_title_template,
+    activity_description_template: safeDefaults.value.activity_description_template,
+    notify_internal: safeDefaults.value.notify_internal,
+    notification_message: safeDefaults.value.notification_message,
+    status: safeDefaults.value.status,
 });
 
 function submit(): void {
@@ -65,4 +79,3 @@ function submit(): void {
         </div>
     </AppLayout>
 </template>
-

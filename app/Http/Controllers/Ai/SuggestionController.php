@@ -12,6 +12,12 @@ use Illuminate\Support\Collection;
 
 class SuggestionController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('module.permission:chat,read')->only(['index']);
+        $this->middleware('module.permission:chat,update')->only(['refresh', 'accept', 'defer', 'archive']);
+    }
+
     public function index(Request $request, AiCommercialAgentService $agentService): JsonResponse
     {
         $tenantId = TenantContext::id($request);

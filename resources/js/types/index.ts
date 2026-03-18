@@ -24,6 +24,25 @@ export type AppPageProps<
         active: TenantContextItem | null;
         available: TenantContextItem[];
     };
+    automation_notifications: {
+        unread_count: number;
+        categories: Array<{
+            key: string;
+            label: string;
+            unread_count: number;
+            items: Array<{
+                id: string;
+                source_id: number | null;
+                title: string;
+                message: string | null;
+                href: string | null;
+                action_label: string | null;
+                read_at: string | null;
+                created_at: string | null;
+                can_mark_read: boolean;
+            }>;
+        }>;
+    };
     sidebarOpen: boolean;
     [key: string]: unknown;
 };

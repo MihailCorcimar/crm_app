@@ -17,6 +17,7 @@ class AiChatMessage extends Model
     protected $fillable = [
         'tenant_id',
         'user_id',
+        'session_id',
         'role',
         'text',
         'intent',
@@ -34,6 +35,7 @@ class AiChatMessage extends Model
             'confidence' => 'float',
             'links' => 'array',
             'context_data' => 'array',
+            'session_id' => 'string',
         ];
     }
 
@@ -45,4 +47,3 @@ class AiChatMessage extends Model
         return $this->belongsTo(User::class);
     }
 }
-

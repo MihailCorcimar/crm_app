@@ -9,11 +9,15 @@ class TenantPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->exists;
+        return $user->exists && $user->hasModulePermission('tenants', 'read');
     }
 
     public function view(User $user, Tenant $tenant): bool
     {
+        if (! $user->hasModulePermission('tenants', 'read')) {
+            return false;
+        }
+
         return $tenant->members()
             ->where('users.id', $user->id)
             ->exists();
@@ -21,11 +25,16 @@ class TenantPolicy
 
     public function create(User $user): bool
     {
-        return $user->canCreateTenants();
+        return $user->hasModulePermission('tenants', 'create')
+            && $user->canCreateTenants();
     }
 
     public function update(User $user, Tenant $tenant): bool
     {
+        if (! $user->hasModulePermission('tenants', 'update')) {
+            return false;
+        }
+
         return $tenant->members()
             ->where('users.id', $user->id)
             ->where(function ($query): void {
@@ -37,6 +46,10 @@ class TenantPolicy
 
     public function authorizeMember(User $user, Tenant $tenant): bool
     {
+        if (! $user->hasModulePermission('tenants', 'update')) {
+            return false;
+        }
+
         if ($tenant->isOwner($user)) {
             return true;
         }
@@ -54,11 +67,16 @@ class TenantPolicy
 
     public function removeMember(User $user, Tenant $tenant): bool
     {
-        return $tenant->isOwner($user);
+        return $user->hasModulePermission('tenants', 'update')
+            && $tenant->isOwner($user);
     }
 
     public function manageOnboarding(User $user, Tenant $tenant): bool
     {
+        if (! $user->hasModulePermission('tenants', 'update')) {
+            return false;
+        }
+
         return $tenant->members()
             ->where('users.id', $user->id)
             ->where(function ($query): void {
@@ -70,6 +88,10 @@ class TenantPolicy
 
     public function manageBilling(User $user, Tenant $tenant): bool
     {
+        if (! $user->hasModulePermission('tenants', 'update')) {
+            return false;
+        }
+
         return $tenant->members()
             ->where('users.id', $user->id)
             ->where(function ($query): void {

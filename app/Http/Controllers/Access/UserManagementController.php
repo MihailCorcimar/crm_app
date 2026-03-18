@@ -13,6 +13,14 @@ use Inertia\Response;
 
 class UserManagementController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('module.permission:access,read')->only(['index']);
+        $this->middleware('module.permission:access,create')->only(['create', 'store']);
+        $this->middleware('module.permission:access,update')->only(['edit', 'update']);
+        $this->middleware('module.permission:access,delete')->only(['destroy']);
+    }
+
     public function index(): Response
     {
         $users = User::query()

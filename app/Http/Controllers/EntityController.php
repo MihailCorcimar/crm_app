@@ -6,6 +6,7 @@ use App\Http\Requests\EntityRequest;
 use App\Models\Contact;
 use App\Models\Country;
 use App\Models\Entity;
+use App\Support\DealStageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,10 +20,12 @@ use Inertia\Response;
 
 class EntityController extends Controller
 {
-    public function __construct()
-    {
+    public function __construct(
+        private readonly DealStageService $dealStageService,
+    ) {
         $this->authorizeResource(Entity::class, 'entity');
     }
+
     /**
      * Display a listing of the resource.
      */
@@ -340,6 +343,10 @@ XML;
             return [];
         }
 
+        $stageLabels = collect($this->dealStageService->forTenant($entity->tenant_id))
+            ->mapWithKeys(fn (array $stage): array => [(string) $stage['value'] => (string) $stage['label']])
+            ->all();
+
         $query = DB::table('deals')
             ->leftJoin('users as owners', 'owners.id', '=', 'deals.owner_id')
             ->where('deals.entity_id', $entity->id);
@@ -361,7 +368,7 @@ XML;
                 'deals.created_at',
                 'owners.name as owner_name',
             ])
-            ->map(static function ($deal): array {
+            ->map(function ($deal) use ($stageLabels): array {
                 $expectedCloseDate = $deal->expected_close_date !== null
                     ? Carbon::parse((string) $deal->expected_close_date)->format('d/m/Y')
                     : null;
@@ -373,7 +380,7 @@ XML;
                 return [
                     'id' => (int) $deal->id,
                     'title' => (string) $deal->title,
-                    'stage' => (string) $deal->stage,
+                    'stage' => (string) ($stageLabels[(string) $deal->stage] ?? (string) $deal->stage),
                     'value' => (float) $deal->value,
                     'probability' => (int) $deal->probability,
                     'expected_close_date' => $expectedCloseDate,

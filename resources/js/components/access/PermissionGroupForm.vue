@@ -5,27 +5,41 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 
-defineProps<{
-    form: {
-        name: string;
-        menu_a_create: boolean;
-        menu_a_read: boolean;
-        menu_a_update: boolean;
-        menu_a_delete: boolean;
-        menu_b_create: boolean;
-        menu_b_read: boolean;
-        menu_b_update: boolean;
-        menu_b_delete: boolean;
-        status: string;
-        errors: Record<string, string>;
-        processing: boolean;
-    };
+type PermissionAction = 'create' | 'read' | 'update' | 'delete';
+
+type PermissionFormState = {
+    name: string;
+    status: string;
+    errors: Record<string, string>;
+    processing: boolean;
+} & Record<string, unknown>;
+
+const props = defineProps<{
+    form: PermissionFormState;
+    permissionModules: Record<string, string>;
+    permissionActions: Record<PermissionAction, string>;
     submitLabel: string;
 }>();
 
 const emit = defineEmits<{
     submit: [];
 }>();
+
+function permissionKey(module: string, action: PermissionAction): string {
+    return `${module}_${action}`;
+}
+
+function isChecked(key: string): boolean {
+    return Boolean(props.form[key]);
+}
+
+function setChecked(key: string, value: boolean | 'indeterminate'): void {
+    props.form[key] = value === true;
+}
+
+function humanLabel(module: string): string {
+    return props.permissionModules[module] ?? module;
+}
 </script>
 
 <template>
@@ -41,43 +55,22 @@ const emit = defineEmits<{
         </FormField>
 
         <div class="grid gap-4 md:grid-cols-2">
-            <div class="space-y-3 rounded-lg border p-4">
-                <p class="text-sm font-semibold">Menu A</p>
-                <label class="flex items-center gap-2 text-sm">
-                    <Checkbox v-model:checked="form.menu_a_create" />
-                    Create
-                </label>
-                <label class="flex items-center gap-2 text-sm">
-                    <Checkbox v-model:checked="form.menu_a_read" />
-                    Read
-                </label>
-                <label class="flex items-center gap-2 text-sm">
-                    <Checkbox v-model:checked="form.menu_a_update" />
-                    Update
-                </label>
-                <label class="flex items-center gap-2 text-sm">
-                    <Checkbox v-model:checked="form.menu_a_delete" />
-                    Delete
-                </label>
-            </div>
-
-            <div class="space-y-3 rounded-lg border p-4">
-                <p class="text-sm font-semibold">Menu B</p>
-                <label class="flex items-center gap-2 text-sm">
-                    <Checkbox v-model:checked="form.menu_b_create" />
-                    Create
-                </label>
-                <label class="flex items-center gap-2 text-sm">
-                    <Checkbox v-model:checked="form.menu_b_read" />
-                    Read
-                </label>
-                <label class="flex items-center gap-2 text-sm">
-                    <Checkbox v-model:checked="form.menu_b_update" />
-                    Update
-                </label>
-                <label class="flex items-center gap-2 text-sm">
-                    <Checkbox v-model:checked="form.menu_b_delete" />
-                    Delete
+            <div
+                v-for="module in Object.keys(permissionModules)"
+                :key="module"
+                class="space-y-3 rounded-lg border p-4"
+            >
+                <p class="text-sm font-semibold">{{ humanLabel(module) }}</p>
+                <label
+                    v-for="(actionLabel, action) in permissionActions"
+                    :key="permissionKey(module, action as PermissionAction)"
+                    class="flex items-center gap-2 text-sm"
+                >
+                    <Checkbox
+                        :checked="isChecked(permissionKey(module, action as PermissionAction))"
+                        @update:checked="(value) => setChecked(permissionKey(module, action as PermissionAction), value)"
+                    />
+                    {{ actionLabel }}
                 </label>
             </div>
         </div>

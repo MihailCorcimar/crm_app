@@ -12,27 +12,26 @@ class LeadFormPolicy
 
     public function viewAny(User $user): bool
     {
-        return $this->canAccessActiveTenant($user);
+        return $this->canAccessActiveTenant($user, 'forms', 'read');
     }
 
     public function view(User $user, LeadForm $leadForm): bool
     {
-        return $this->canAccessTenantRecord($user, (int) $leadForm->tenant_id);
+        return $this->canAccessTenantRecord($user, (int) $leadForm->tenant_id, 'forms', 'read');
     }
 
     public function create(User $user): bool
     {
-        return $this->canAccessActiveTenant($user);
+        return $this->canAccessActiveTenant($user, 'forms', 'create');
     }
 
     public function update(User $user, LeadForm $leadForm): bool
     {
-        return $this->canAccessTenantRecord($user, (int) $leadForm->tenant_id);
+        return $this->canAccessTenantRecord($user, (int) $leadForm->tenant_id, 'forms', 'update');
     }
 
     public function delete(User $user, LeadForm $leadForm): bool
     {
-        return $this->canAccessTenantRecord($user, (int) $leadForm->tenant_id);
+        return $this->canAccessTenantRecord($user, (int) $leadForm->tenant_id, 'forms', 'delete');
     }
 }
-

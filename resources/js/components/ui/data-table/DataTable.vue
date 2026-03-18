@@ -32,10 +32,14 @@ const table = useVueTable({
 </script>
 
 <template>
-    <div class="rounded-md border">
+    <div class="crm-data-table overflow-hidden rounded-xl border border-zinc-200/70 bg-white/80 shadow-sm">
         <Table>
             <TableHeader>
-                <TableRow v-for="headerGroup in table.getHeaderGroups()" :key="headerGroup.id">
+                <TableRow
+                    v-for="headerGroup in table.getHeaderGroups()"
+                    :key="headerGroup.id"
+                    class="bg-zinc-50/70"
+                >
                     <TableHead v-for="header in headerGroup.headers" :key="header.id">
                         <FlexRender
                             v-if="!header.isPlaceholder"
@@ -57,7 +61,7 @@ const table = useVueTable({
                     </TableRow>
                 </template>
                 <TableRow v-else>
-                    <TableCell :colspan="props.columns.length" class="h-24 text-center">
+                    <TableCell :colspan="props.columns.length" class="h-24 text-center text-zinc-500">
                         {{ emptyText ?? 'Sem resultados.' }}
                     </TableCell>
                 </TableRow>

@@ -20,7 +20,7 @@ const props = defineProps<{
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Gestao de Acessos - Permissoes', href: '/access/permission-groups' },
+    { title: 'Gestão de Acessos - Permissões', href: '/access/permission-groups' },
 ];
 
 function deleteGroup(group: PermissionGroupRow): void {
@@ -87,13 +87,13 @@ const columns: ColumnDef<PermissionGroupRow>[] = [
 </script>
 
 <template>
-    <Head title="Gestao de Acessos - Permissoes" />
+    <Head title="Gestão de Acessos - Permissões" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
             <Card>
                 <CardHeader class="flex flex-row items-center justify-between">
-                    <CardTitle>Permissoes</CardTitle>
+                    <CardTitle>Permissões</CardTitle>
                     <Button as-child>
                         <Link href="/access/permission-groups/create">Criar</Link>
                     </Button>
@@ -102,10 +102,12 @@ const columns: ColumnDef<PermissionGroupRow>[] = [
                     <DataTable
                         :columns="columns"
                         :data="permissionGroups"
-                        empty-text="Sem grupos de permissao."
+                        empty-text="Sem grupos de permissão."
                     />
                 </CardContent>
             </Card>
         </div>
     </AppLayout>
 </template>
+
+

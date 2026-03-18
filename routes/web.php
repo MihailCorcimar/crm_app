@@ -6,6 +6,7 @@ use App\Http\Controllers\Ai\ChatController as AiChatController;
 use App\Http\Controllers\Ai\SuggestionController as AiSuggestionController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\ContactController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DealAutomationRuleController;
 use App\Http\Controllers\DealController;
 use App\Http\Controllers\DealProductStatsController;
@@ -19,7 +20,6 @@ use App\Http\Controllers\TenantController;
 use App\Http\Controllers\TenantMemberController;
 use App\Http\Controllers\TenantOnboardingController;
 use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
 
 Route::get('/', function () {
     return auth()->check()
@@ -27,9 +27,9 @@ Route::get('/', function () {
         : to_route('login');
 })->name('home');
 
-Route::get('dashboard', function () {
-    return Inertia::render('Dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
+Route::get('dashboard', DashboardController::class)
+    ->middleware(['auth', 'verified'])
+    ->name('dashboard');
 
 Route::get('public/lead-forms/{token}', [PublicLeadFormController::class, 'show'])
     ->name('public.lead-forms.show');
@@ -64,6 +64,7 @@ Route::middleware(['auth'])->group(function (): void {
 
     Route::middleware('tenant.active')->group(function (): void {
         Route::get('ai/chat', [AiChatController::class, 'index'])->name('ai.chat.index');
+        Route::get('ai/chat/history', [AiChatController::class, 'history'])->name('ai.chat.history');
         Route::post('ai/chat/stream', [AiChatController::class, 'stream'])->middleware('throttle:ai-chat')->name('ai.chat.stream');
         Route::post('ai/chat', [AiChatController::class, 'store'])->middleware('throttle:ai-chat')->name('ai.chat.store');
         Route::get('ai/suggestions', [AiSuggestionController::class, 'index'])->name('ai.suggestions.index');
@@ -113,6 +114,10 @@ Route::middleware(['auth'])->group(function (): void {
         Route::get('deals/product-stats/export', [DealProductStatsController::class, 'exportCsv'])->name('deals.product-stats.export');
         Route::get('deals/product-stats/{item}', [DealProductStatsController::class, 'show'])->name('deals.product-stats.show');
         Route::resource('deals', DealController::class);
+        Route::post('lead-forms/{leadForm}/submissions/{submission}/convert', [LeadFormController::class, 'convertSubmission'])
+            ->name('lead-forms.submissions.convert');
+        Route::patch('lead-forms/{leadForm}/submissions/{submission}/ignore', [LeadFormController::class, 'ignoreSubmission'])
+            ->name('lead-forms.submissions.ignore');
         Route::resource('lead-forms', LeadFormController::class)
             ->parameters(['lead-forms' => 'leadForm']);
         Route::post('people/{contact}/merge', [ContactController::class, 'merge'])

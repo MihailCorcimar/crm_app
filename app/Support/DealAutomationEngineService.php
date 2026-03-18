@@ -249,12 +249,13 @@ class DealAutomationEngineService
 
     private function renderTemplate(string $template, Deal $deal, CarbonImmutable $latestActivityAt): string
     {
+        $dealTitle = trim((string) $deal->title);
         $entityName = trim((string) ($deal->entity?->name ?? 'cliente'));
         $ownerName = trim((string) ($deal->owner?->name ?? 'responsavel'));
         $daysWithoutActivity = $latestActivityAt->diffInDays(CarbonImmutable::now($latestActivityAt->timezone));
 
         return strtr($template, [
-            '{deal_title}' => trim((string) $deal->title),
+            '{deal_title}' => $dealTitle !== '' ? $dealTitle : 'negocio',
             '{entity_name}' => $entityName !== '' ? $entityName : 'cliente',
             '{owner_name}' => $ownerName !== '' ? $ownerName : 'responsavel',
             '{days_without_activity}' => (string) $daysWithoutActivity,

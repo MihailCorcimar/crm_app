@@ -1,11 +1,28 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { Button } from '@/components/ui/button';
 import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 
-type SelectOption = {
+type EntitySelectOption = {
+    id: number;
+    name: string;
+};
+
+type PersonSelectOption = {
+    id: number;
+    name: string;
+    entity_id: number | null;
+};
+
+type DealSelectOption = {
+    id: number;
+    name: string;
+    entity_id: number | null;
+};
+
+type SimpleSelectOption = {
     id: number;
     name: string;
 };
@@ -34,13 +51,13 @@ const props = defineProps<{
         errors: Record<string, string>;
         processing: boolean;
     };
-    owners: SelectOption[];
+    owners: SimpleSelectOption[];
     eventableTypes: EventableTypeOption[];
-    entities: SelectOption[];
-    people: SelectOption[];
-    deals: SelectOption[];
-    types: SelectOption[];
-    actions: SelectOption[];
+    entities: EntitySelectOption[];
+    people: PersonSelectOption[];
+    deals: DealSelectOption[];
+    types: SimpleSelectOption[];
+    actions: SimpleSelectOption[];
     submitLabel: string;
 }>();
 
@@ -48,7 +65,7 @@ const emit = defineEmits<{
     submit: [];
 }>();
 
-const eventableOptions = computed<SelectOption[]>(() => {
+const eventableOptions = computed<Array<EntitySelectOption | PersonSelectOption | DealSelectOption>>(() => {
     if (props.form.eventable_type === 'entity') {
         return props.entities;
     }
@@ -63,6 +80,113 @@ const eventableOptions = computed<SelectOption[]>(() => {
 
     return [];
 });
+
+const entityPickerIds = ref<number[]>([]);
+
+function normalizeIds(values: Array<number | string>): number[] {
+    return [...new Set(
+        values
+            .map((value) => Number(value))
+            .filter((value) => Number.isInteger(value) && value > 0),
+    )];
+}
+
+const personEntityById = computed<Map<number, number | null>>(
+    () => new Map(props.people.map((item) => [item.id, item.entity_id])),
+);
+
+const dealEntityById = computed<Map<number, number | null>>(
+    () => new Map(props.deals.map((item) => [item.id, item.entity_id])),
+);
+
+const selectedEntities = computed<EntitySelectOption[]>(() => {
+    const selectedSet = new Set(normalizeIds(props.form.attendee_entity_ids));
+
+    return props.entities.filter((entity) => selectedSet.has(entity.id));
+});
+
+const pickedEntitiesCount = computed<number>(() => normalizeIds(entityPickerIds.value).length);
+
+function peopleForEntity(entityId: number): PersonSelectOption[] {
+    return props.people.filter((person) => person.entity_id === entityId);
+}
+
+function dealsForEntity(entityId: number): DealSelectOption[] {
+    return props.deals.filter((deal) => deal.entity_id === entityId);
+}
+
+function pruneAttendeesToSelectedEntities(): void {
+    const selectedEntitySet = new Set(normalizeIds(props.form.attendee_entity_ids));
+
+    props.form.attendee_person_ids = normalizeIds(props.form.attendee_person_ids).filter((personId) => {
+        const entityId = personEntityById.value.get(personId);
+
+        return entityId !== null && entityId !== undefined && selectedEntitySet.has(entityId);
+    });
+
+    props.form.attendee_deal_ids = normalizeIds(props.form.attendee_deal_ids).filter((dealId) => {
+        const entityId = dealEntityById.value.get(dealId);
+
+        return entityId !== null && entityId !== undefined && selectedEntitySet.has(entityId);
+    });
+}
+
+function applyEntitySelection(): void {
+    props.form.attendee_entity_ids = normalizeIds(entityPickerIds.value);
+}
+
+function isPersonChecked(personId: number): boolean {
+    return normalizeIds(props.form.attendee_person_ids).includes(personId);
+}
+
+function isDealChecked(dealId: number): boolean {
+    return normalizeIds(props.form.attendee_deal_ids).includes(dealId);
+}
+
+function togglePerson(personId: number, checked: boolean): void {
+    const next = new Set(normalizeIds(props.form.attendee_person_ids));
+
+    if (checked) {
+        next.add(personId);
+    } else {
+        next.delete(personId);
+    }
+
+    props.form.attendee_person_ids = [...next];
+}
+
+function toggleDeal(dealId: number, checked: boolean): void {
+    const next = new Set(normalizeIds(props.form.attendee_deal_ids));
+
+    if (checked) {
+        next.add(dealId);
+    } else {
+        next.delete(dealId);
+    }
+
+    props.form.attendee_deal_ids = [...next];
+}
+
+function selectedPeopleCount(entityId: number): number {
+    const peopleIds = new Set(peopleForEntity(entityId).map((item) => item.id));
+
+    return normalizeIds(props.form.attendee_person_ids).filter((item) => peopleIds.has(item)).length;
+}
+
+function selectedDealsCount(entityId: number): number {
+    const dealIds = new Set(dealsForEntity(entityId).map((item) => item.id));
+
+    return normalizeIds(props.form.attendee_deal_ids).filter((item) => dealIds.has(item)).length;
+}
+
+watch(
+    () => props.form.attendee_entity_ids,
+    (values) => {
+        entityPickerIds.value = normalizeIds(values);
+        pruneAttendeesToSelectedEntities();
+    },
+    { immediate: true, deep: true },
+);
 
 </script>
 
@@ -207,65 +331,103 @@ const eventableOptions = computed<SelectOption[]>(() => {
             </FormField>
         </div>
 
-        <div class="grid gap-4 md:grid-cols-3">
+        <div class="space-y-4">
             <FormField name="attendee_entity_ids">
                 <FormItem>
-                    <FormLabel>Attendees - Entidades</FormLabel>
+                    <FormLabel>Entidades participantes</FormLabel>
                     <FormControl>
-                        <select
-                            multiple
-                            v-model="form.attendee_entity_ids"
-                            class="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring min-h-28 w-full rounded-md border px-3 py-2 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            <option v-for="entity in entities" :key="entity.id" :value="entity.id">
-                                {{ entity.name }}
-                            </option>
-                        </select>
+                        <div class="rounded-md border p-3">
+                            <details open>
+                                <summary class="cursor-pointer text-sm font-medium">
+                                    Selecionar entidades ({{ pickedEntitiesCount }})
+                                </summary>
+                                <div class="mt-3 max-h-44 overflow-y-auto rounded-md border p-2 pr-3">
+                                    <div class="grid gap-2 md:grid-cols-2">
+                                        <label v-for="entity in entities" :key="entity.id" class="flex items-center gap-2 text-sm">
+                                            <input
+                                                v-model="entityPickerIds"
+                                                type="checkbox"
+                                                :value="entity.id"
+                                                class="h-4 w-4 rounded border-zinc-300 text-primary"
+                                            />
+                                            <span>{{ entity.name }}</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </details>
+
+                            <div class="mt-3">
+                                <Button type="button" variant="outline" @click="applyEntitySelection">
+                                    Escolher entidades
+                                </Button>
+                            </div>
+                        </div>
                     </FormControl>
-                    <FormDescription>Ctrl/Command + clique para selecionar varios.</FormDescription>
+                    <FormDescription>Seleciona entidades e clica em "Escolher entidades".</FormDescription>
                     <FormMessage>{{ form.errors.attendee_entity_ids }}</FormMessage>
                 </FormItem>
             </FormField>
 
-            <FormField name="attendee_person_ids">
-                <FormItem>
-                    <FormLabel>Attendees - Pessoas</FormLabel>
-                    <FormControl>
-                        <select
-                            multiple
-                            v-model="form.attendee_person_ids"
-                            class="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring min-h-28 w-full rounded-md border px-3 py-2 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            <option v-for="person in people" :key="person.id" :value="person.id">
-                                {{ person.name }}
-                            </option>
-                        </select>
-                    </FormControl>
-                    <FormDescription>Ctrl/Command + clique para selecionar varios.</FormDescription>
-                    <FormMessage>{{ form.errors.attendee_person_ids }}</FormMessage>
-                </FormItem>
-            </FormField>
+            <div v-if="selectedEntities.length === 0" class="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                Sem entidades escolhidas.
+            </div>
 
-            <FormField name="attendee_deal_ids">
-                <FormItem>
-                    <FormLabel>Attendees - Negócios</FormLabel>
-                    <FormControl>
-                        <select
-                            multiple
-                            v-model="form.attendee_deal_ids"
-                            class="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring min-h-28 w-full rounded-md border px-3 py-2 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            <option v-for="deal in deals" :key="deal.id" :value="deal.id">
-                                {{ deal.name }}
-                            </option>
-                        </select>
-                    </FormControl>
-                    <FormDescription>Ctrl/Command + clique para selecionar varios.</FormDescription>
-                    <FormMessage>{{ form.errors.attendee_deal_ids }}</FormMessage>
-                </FormItem>
-            </FormField>
+            <div v-else class="space-y-3">
+                <div v-for="entity in selectedEntities" :key="entity.id" class="rounded-md border p-3">
+                    <p class="text-sm font-semibold">{{ entity.name }}</p>
+
+                    <div class="mt-3 grid gap-3 md:grid-cols-2">
+                        <details class="rounded-md border p-2">
+                            <summary class="cursor-pointer text-sm font-medium">
+                                Pessoas ({{ selectedPeopleCount(entity.id) }} selecionada(s))
+                            </summary>
+                            <div class="mt-2 max-h-44 space-y-2 overflow-auto pr-1">
+                                <label
+                                    v-for="person in peopleForEntity(entity.id)"
+                                    :key="person.id"
+                                    class="flex items-center gap-2 text-sm"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        :checked="isPersonChecked(person.id)"
+                                        class="h-4 w-4 rounded border-zinc-300 text-primary"
+                                        @change="togglePerson(person.id, ($event.target as HTMLInputElement).checked)"
+                                    />
+                                    <span>{{ person.name }}</span>
+                                </label>
+                                <p v-if="peopleForEntity(entity.id).length === 0" class="text-sm text-muted-foreground">
+                                    Sem pessoas para esta entidade.
+                                </p>
+                            </div>
+                        </details>
+
+                        <details class="rounded-md border p-2">
+                            <summary class="cursor-pointer text-sm font-medium">
+                                Negócios ({{ selectedDealsCount(entity.id) }} selecionado(s))
+                            </summary>
+                            <div class="mt-2 max-h-44 space-y-2 overflow-auto pr-1">
+                                <label
+                                    v-for="deal in dealsForEntity(entity.id)"
+                                    :key="deal.id"
+                                    class="flex items-center gap-2 text-sm"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        :checked="isDealChecked(deal.id)"
+                                        class="h-4 w-4 rounded border-zinc-300 text-primary"
+                                        @change="toggleDeal(deal.id, ($event.target as HTMLInputElement).checked)"
+                                    />
+                                    <span>{{ deal.name }}</span>
+                                </label>
+                                <p v-if="dealsForEntity(entity.id).length === 0" class="text-sm text-muted-foreground">
+                                    Sem negócios para esta entidade.
+                                </p>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+            </div>
         </div>
-
         <FormField name="description">
             <FormItem>
                 <FormLabel>Descricao</FormLabel>

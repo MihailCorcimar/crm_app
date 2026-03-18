@@ -10,6 +10,11 @@ use Inertia\Response;
 
 class LogController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('module.permission:logs,read');
+    }
+
     public function index(Request $request): Response
     {
         $query = ActivityLog::query()->with('user:id,name');

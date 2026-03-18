@@ -1,14 +1,13 @@
-<script setup lang="ts">
-import { Head, Link, router } from '@inertiajs/vue3';
-import { type ColumnDef } from '@tanstack/vue-table';
-import { h, ref, watch } from 'vue';
-import FullCalendar from '@fullcalendar/vue3';
+﻿<script setup lang="ts">
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import timeGridPlugin from '@fullcalendar/timegrid';
+import FullCalendar from '@fullcalendar/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
+import { ref, watch } from 'vue';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { DataTable } from '@/components/ui/data-table';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 
@@ -21,6 +20,8 @@ type EventableTypeOption = {
     value: 'entity' | 'person' | 'deal';
     label: string;
 };
+
+type CalendarTimeState = 'past' | 'today' | 'upcoming';
 
 type CalendarEventItem = {
     id: number;
@@ -37,39 +38,29 @@ type CalendarEventItem = {
         person_attendees: string[];
         deal_attendees: string[];
         status: string;
+        time_state: CalendarTimeState;
     };
-};
-
-type CalendarRow = {
-    id: number;
-    title: string | null;
-    start_at: string;
-    end_at: string;
-    eventable: string;
-    owner: string | null;
-    type: string | null;
-    action: string | null;
-    attendees_count: number;
-    status: string;
 };
 
 const props = defineProps<{
     events: CalendarEventItem[];
-    rows: CalendarRow[];
     owners: SelectOption[];
     eventableTypes: EventableTypeOption[];
     filters: {
         owner_id: string | number;
         eventable_type: string;
+        time_scope: 'all' | 'upcoming' | 'today' | 'past';
     };
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Calendário', href: '/calendar' },
+    { title: 'CalendÃ¡rio', href: '/calendar' },
 ];
 
 const selectedOwnerId = ref<string>(String(props.filters.owner_id ?? ''));
 const selectedEventableType = ref<string>(String(props.filters.eventable_type ?? ''));
+const selectedTimeScope = ref<string>(String(props.filters.time_scope ?? 'all'));
+const calendarShellRef = ref<HTMLElement | null>(null);
 
 const hoverTooltip = ref<{
     visible: boolean;
@@ -77,24 +68,31 @@ const hoverTooltip = ref<{
     y: number;
     title: string;
     period: string;
+    type: string;
+    action: string;
     eventable: string;
     entities: string[];
     people: string[];
     deals: string[];
+    timeState: CalendarTimeState;
 }>({
     visible: false,
     x: 0,
     y: 0,
     title: '',
     period: '',
+    type: '-',
+    action: '-',
     eventable: '-',
     entities: [],
     people: [],
     deals: [],
+    timeState: 'upcoming',
 });
 
 type CalendarHoverInfo = {
     jsEvent: MouseEvent;
+    el?: Element;
     event: {
         title: string;
         start: Date | null;
@@ -122,6 +120,39 @@ function toStringList(value: unknown): string[] {
         .filter((item) => item.length > 0);
 }
 
+function toTimeState(value: unknown): CalendarTimeState {
+    if (value === 'past' || value === 'today' || value === 'upcoming') {
+        return value;
+    }
+
+    return 'upcoming';
+}
+
+function timeStateLabel(value: CalendarTimeState): string {
+    if (value === 'past') {
+        return 'Passado';
+    }
+
+    if (value === 'today') {
+        return 'Hoje';
+    }
+
+    return 'PrÃ³ximo';
+}
+
+function timeStateBadgeClass(value: CalendarTimeState): string {
+    if (value === 'past') {
+        return 'bg-zinc-100 text-zinc-700 border-zinc-200';
+    }
+
+    if (value === 'today') {
+        return 'bg-amber-100 text-amber-800 border-amber-200';
+    }
+
+    return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+}
+
+
 function formatPeriod(start: Date | null, end: Date | null): string {
     if (!start) {
         return '-';
@@ -133,11 +164,53 @@ function formatPeriod(start: Date | null, end: Date | null): string {
     return `${startLabel} - ${endLabel}`;
 }
 
+function toTooltipText(value: unknown): string {
+    if (typeof value !== 'string') {
+        return '-';
+    }
+
+    const text = value.trim();
+
+    return text.length > 0 ? text : '-';
+}
+
 function showEventTooltip(info: CalendarHoverInfo): void {
-    const preferredX = info.jsEvent.clientX + 16;
-    const preferredY = info.jsEvent.clientY + 16;
-    const x = Math.max(12, Math.min(preferredX, window.innerWidth - 450));
-    const y = Math.max(12, Math.min(preferredY, window.innerHeight - 260));
+    const shellElement = calendarShellRef.value;
+    if (!shellElement) {
+        return;
+    }
+
+    const tooltipWidth = 420;
+    const tooltipHeight = 340;
+    const margin = 8;
+    const sideOffset = 10;
+
+    const shellRect = shellElement.getBoundingClientRect();
+
+    let preferredX = (info.jsEvent.clientX - shellRect.left) + 16;
+    let preferredY = (info.jsEvent.clientY - shellRect.top) + 12;
+
+    if (info.el instanceof HTMLElement) {
+        const rect = info.el.getBoundingClientRect();
+        const rightSpace = shellRect.right - rect.right;
+        const leftSpace = rect.left - shellRect.left;
+
+        if (rightSpace >= tooltipWidth + sideOffset) {
+            preferredX = (rect.right - shellRect.left) + sideOffset;
+        } else if (leftSpace >= tooltipWidth + sideOffset) {
+            preferredX = (rect.left - shellRect.left) - tooltipWidth - sideOffset;
+        } else {
+            preferredX = (rect.left - shellRect.left) + (rect.width / 2) - (tooltipWidth / 2);
+        }
+
+        preferredY = (rect.top - shellRect.top) + (rect.height / 2) - (tooltipHeight / 2);
+    }
+
+    const maxX = Math.max(margin, shellRect.width - tooltipWidth - margin);
+    const maxY = Math.max(margin, shellRect.height - tooltipHeight - margin);
+
+    const x = Math.max(margin, Math.min(preferredX, maxX));
+    const y = Math.max(margin, Math.min(preferredY, maxY));
 
     hoverTooltip.value = {
         visible: true,
@@ -145,10 +218,13 @@ function showEventTooltip(info: CalendarHoverInfo): void {
         y,
         title: info.event.title || 'Atividade',
         period: formatPeriod(info.event.start, info.event.end),
-        eventable: String(info.event.extendedProps.eventable ?? '-'),
+        type: toTooltipText(info.event.extendedProps.type),
+        action: toTooltipText(info.event.extendedProps.action),
+        eventable: toTooltipText(info.event.extendedProps.eventable),
         entities: toStringList(info.event.extendedProps.entity_attendees),
         people: toStringList(info.event.extendedProps.person_attendees),
         deals: toStringList(info.event.extendedProps.deal_attendees),
+        timeState: toTimeState(info.event.extendedProps.time_state),
     };
 }
 
@@ -161,6 +237,7 @@ watch(
     (value) => {
         selectedOwnerId.value = String(value.owner_id ?? '');
         selectedEventableType.value = String(value.eventable_type ?? '');
+        selectedTimeScope.value = String(value.time_scope ?? 'all');
     },
 );
 
@@ -174,6 +251,15 @@ const calendarOptions = ref({
     },
     events: props.events,
     locale: 'pt',
+    eventClassNames: (arg: { event: { extendedProps: Record<string, unknown> } }) => {
+        const state = toTimeState(arg.event.extendedProps.time_state);
+
+        return {
+            past: ['crm-fc-event', 'crm-fc-event-past'],
+            today: ['crm-fc-event', 'crm-fc-event-today'],
+            upcoming: ['crm-fc-event', 'crm-fc-event-upcoming'],
+        }[state];
+    },
     eventMouseEnter: (info: CalendarHoverInfo) => {
         showEventTooltip(info);
     },
@@ -191,6 +277,7 @@ function applyFilters(): void {
         {
             owner_id: selectedOwnerId.value || '',
             eventable_type: selectedEventableType.value || '',
+            time_scope: selectedTimeScope.value || 'all',
         },
         {
             preserveState: true,
@@ -198,77 +285,24 @@ function applyFilters(): void {
     );
 }
 
-function deleteEvent(event: CalendarRow): void {
-    if (!window.confirm('Eliminar atividade?')) {
-        return;
-    }
-
-    router.delete(`/calendar/${event.id}`, {
-        preserveScroll: true,
-    });
-}
-
-const columns: ColumnDef<CalendarRow>[] = [
-    { accessorKey: 'title', header: 'Titulo', cell: ({ row }: { row: { original: CalendarRow } }) => row.original.title ?? '-' },
-    { accessorKey: 'start_at', header: 'Inicio', cell: ({ row }: { row: { original: CalendarRow } }) => row.original.start_at },
-    { accessorKey: 'end_at', header: 'Fim', cell: ({ row }: { row: { original: CalendarRow } }) => row.original.end_at },
-    { accessorKey: 'eventable', header: 'Associacao', cell: ({ row }: { row: { original: CalendarRow } }) => row.original.eventable },
-    { accessorKey: 'owner', header: 'Responsavel', cell: ({ row }: { row: { original: CalendarRow } }) => row.original.owner ?? '-' },
-    { accessorKey: 'type', header: 'Tipo', cell: ({ row }: { row: { original: CalendarRow } }) => row.original.type ?? '-' },
-    { accessorKey: 'action', header: 'Ação', cell: ({ row }: { row: { original: CalendarRow } }) => row.original.action ?? '-' },
-    { accessorKey: 'attendees_count', header: 'Attendees', cell: ({ row }: { row: { original: CalendarRow } }) => row.original.attendees_count },
-    { accessorKey: 'status', header: 'Estado', cell: ({ row }: { row: { original: CalendarRow } }) => (row.original.status === 'active' ? 'Ativo' : 'Inativo') },
-    {
-        id: 'actions',
-        header: 'Ações',
-        cell: ({ row }: { row: { original: CalendarRow } }) =>
-            h('div', { class: 'flex gap-2' }, [
-                h(
-                    Button,
-                    {
-                        size: 'sm',
-                        variant: 'outline',
-                        asChild: true,
-                    },
-                    {
-                        default: () =>
-                            h(
-                                Link,
-                                { href: `/calendar/${row.original.id}/edit` },
-                                () => 'Editar',
-                            ),
-                    },
-                ),
-                h(
-                    Button,
-                    {
-                        size: 'sm',
-                        variant: 'destructive',
-                        onClick: () => deleteEvent(row.original),
-                    },
-                    () => 'Eliminar',
-                ),
-            ]),
-    },
-];
 </script>
 
 <template>
-    <Head title="Calendário" />
+    <Head title="CalendÃ¡rio" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
             <Card>
-                <CardHeader class="flex flex-row items-center justify-between">
-                    <CardTitle>Calendário</CardTitle>
+                <CardHeader class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <CardTitle>CalendÃ¡rio</CardTitle>
                     <Button as-child>
                         <Link href="/calendar/create">Agendar atividade</Link>
                     </Button>
                 </CardHeader>
                 <CardContent class="space-y-4">
-                    <form class="grid gap-4 md:grid-cols-3" @submit.prevent="applyFilters">
+                    <form class="grid gap-4 md:grid-cols-4" @submit.prevent="applyFilters">
                         <div class="grid gap-2">
-                            <label class="text-sm font-medium">Filtrar por Responsavel</label>
+                            <label class="text-sm font-medium">Filtrar por responsÃ¡vel</label>
                             <select
                                 v-model="selectedOwnerId"
                                 class="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none"
@@ -281,7 +315,7 @@ const columns: ColumnDef<CalendarRow>[] = [
                         </div>
 
                         <div class="grid gap-2">
-                            <label class="text-sm font-medium">Filtrar por Associacao</label>
+                            <label class="text-sm font-medium">Filtrar por associaÃ§Ã£o</label>
                             <select
                                 v-model="selectedEventableType"
                                 class="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none"
@@ -293,6 +327,19 @@ const columns: ColumnDef<CalendarRow>[] = [
                             </select>
                         </div>
 
+                        <div class="grid gap-2">
+                            <label class="text-sm font-medium">PerÃ­odo</label>
+                            <select
+                                v-model="selectedTimeScope"
+                                class="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none"
+                            >
+                                <option value="all">Todos</option>
+                                <option value="upcoming">Hoje e prÃ³ximos</option>
+                                <option value="today">A decorrer hoje</option>
+                                <option value="past">Passados</option>
+                            </select>
+                        </div>
+
                         <div class="flex items-end gap-2">
                             <Button type="submit">Filtrar</Button>
                             <Button type="button" variant="outline" as-child>
@@ -301,21 +348,35 @@ const columns: ColumnDef<CalendarRow>[] = [
                         </div>
                     </form>
 
-                    <div class="overflow-x-auto rounded-md border bg-background p-2">
-                        <FullCalendar :options="calendarOptions" />
-                    </div>
+                    <div ref="calendarShellRef" class="crm-calendar-shell relative">
+                        <div class="crm-calendar">
+                            <FullCalendar :options="calendarOptions" />
+                        </div>
 
-                    <div
+                        <div
                         v-if="hoverTooltip.visible"
-                        class="pointer-events-none fixed z-50 w-[26rem] max-w-[calc(100vw-2rem)] rounded-md border bg-background p-3 shadow-lg"
+                        class="crm-event-tooltip pointer-events-none absolute z-50 w-[26rem] max-w-[calc(100%-1rem)] rounded-md border bg-background p-3 shadow-lg"
                         :style="{ left: `${hoverTooltip.x}px`, top: `${hoverTooltip.y}px` }"
                     >
-                        <p class="text-sm font-semibold">{{ hoverTooltip.title }}</p>
+                        <div class="mb-2 flex items-center justify-between gap-3">
+                            <p class="text-sm font-semibold">{{ hoverTooltip.title }}</p>
+                            <Badge variant="outline" :class="timeStateBadgeClass(hoverTooltip.timeState)">
+                                {{ timeStateLabel(hoverTooltip.timeState) }}
+                            </Badge>
+                        </div>
                         <p class="mt-1 text-xs text-muted-foreground">{{ hoverTooltip.period }}</p>
 
                         <dl class="mt-2 space-y-2 text-xs">
                             <div>
-                                <dt class="font-medium text-muted-foreground">Associacao principal</dt>
+                                <dt class="font-medium text-muted-foreground">Tipo</dt>
+                                <dd>{{ hoverTooltip.type }}</dd>
+                            </div>
+                            <div>
+                                <dt class="font-medium text-muted-foreground">AÃ§Ã£o</dt>
+                                <dd>{{ hoverTooltip.action }}</dd>
+                            </div>
+                            <div>
+                                <dt class="font-medium text-muted-foreground">AssociaÃ§Ã£o principal</dt>
                                 <dd>{{ hoverTooltip.eventable }}</dd>
                             </div>
                             <div>
@@ -327,22 +388,16 @@ const columns: ColumnDef<CalendarRow>[] = [
                                 <dd>{{ hoverTooltip.people.length > 0 ? hoverTooltip.people.join(', ') : '-' }}</dd>
                             </div>
                             <div>
-                                <dt class="font-medium text-muted-foreground">Negócios</dt>
+                                <dt class="font-medium text-muted-foreground">NegÃ³cios</dt>
                                 <dd>{{ hoverTooltip.deals.length > 0 ? hoverTooltip.deals.join(', ') : '-' }}</dd>
                             </div>
                         </dl>
                     </div>
-                </CardContent>
-            </Card>
-
-            <Card>
-                <CardHeader>
-                    <CardTitle>Atividades</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <DataTable :columns="columns" :data="rows" empty-text="Sem atividades." />
+                    </div>
                 </CardContent>
             </Card>
         </div>
     </AppLayout>
 </template>
+
+

@@ -1,9 +1,9 @@
 <script setup lang="ts">
+import { Head, useForm } from '@inertiajs/vue3';
 import LeadFormForm from '@/components/lead-forms/LeadFormForm.vue';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { Head, useForm } from '@inertiajs/vue3';
 
 type FieldSchemaRow = {
     key: string;
@@ -15,6 +15,17 @@ type FieldSchemaRow = {
     options?: string[];
 };
 
+type ConversionSettings = {
+    create_deal: boolean;
+    entity_name_field_key: string | null;
+    deal_title_field_key: string | null;
+    deal_title_template: string;
+    deal_value_field_key: string | null;
+    deal_stage: string;
+    deal_owner_id: number | null;
+    deal_probability: number;
+};
+
 const props = defineProps<{
     defaults: {
         name: string;
@@ -23,12 +34,15 @@ const props = defineProps<{
         requires_captcha: boolean;
         confirmation_message: string;
         field_schema: FieldSchemaRow[];
+        conversion_settings: ConversionSettings;
     };
+    ownerOptions: Array<{ id: number; name: string }>;
+    stageOptions: Array<{ value: string; label: string }>;
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Formulários publicos', href: '/lead-forms' },
-    { title: 'Criar formulário', href: '/lead-forms/create' },
+    { title: 'Formularios publicos', href: '/lead-forms' },
+    { title: 'Criar formulario', href: '/lead-forms/create' },
 ];
 
 const form = useForm({
@@ -38,6 +52,7 @@ const form = useForm({
     requires_captcha: props.defaults.requires_captcha,
     confirmation_message: props.defaults.confirmation_message,
     field_schema: props.defaults.field_schema,
+    conversion_settings: props.defaults.conversion_settings,
 });
 
 function submit(): void {
@@ -46,18 +61,20 @@ function submit(): void {
 </script>
 
 <template>
-    <Head title="Criar formulário publico" />
+    <Head title="Criar formulario publico" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
             <Card>
                 <CardHeader>
-                    <CardTitle>Novo formulário publico</CardTitle>
+                    <CardTitle>Novo formulario publico</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <LeadFormForm
                         :form="form"
-                        submit-label="Guardar formulário"
+                        :owner-options="ownerOptions"
+                        :stage-options="stageOptions"
+                        submit-label="Guardar formulario"
                         @submit="submit"
                     />
                 </CardContent>
@@ -65,3 +82,4 @@ function submit(): void {
         </div>
     </AppLayout>
 </template>
+

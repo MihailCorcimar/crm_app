@@ -24,22 +24,20 @@ class PermissionGroupRequest extends FormRequest
         /** @var PermissionGroup|null $permissionGroup */
         $permissionGroup = $this->route('permission_group');
 
-        return [
+        $rules = [
             'name' => [
                 'required',
                 'string',
                 'max:255',
                 Rule::unique('permission_groups', 'name')->ignore($permissionGroup?->id),
             ],
-            'menu_a_create' => ['boolean'],
-            'menu_a_read' => ['boolean'],
-            'menu_a_update' => ['boolean'],
-            'menu_a_delete' => ['boolean'],
-            'menu_b_create' => ['boolean'],
-            'menu_b_read' => ['boolean'],
-            'menu_b_update' => ['boolean'],
-            'menu_b_delete' => ['boolean'],
             'status' => ['required', Rule::in(['active', 'inactive'])],
         ];
+
+        foreach (PermissionGroup::permissionColumns() as $column) {
+            $rules[$column] = ['boolean'];
+        }
+
+        return $rules;
     }
 }

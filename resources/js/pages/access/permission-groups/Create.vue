@@ -5,22 +5,30 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 
+type PermissionAction = 'create' | 'read' | 'update' | 'delete';
+
+const props = defineProps<{
+    permissionModules: Record<string, string>;
+    permissionActions: Record<PermissionAction, string>;
+}>();
+
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Gestao de Acessos - Permissoes', href: '/access/permission-groups' },
+    { title: 'Gestão de Acessos - Permissões', href: '/access/permission-groups' },
     { title: 'Criar grupo', href: '/access/permission-groups/create' },
 ];
 
-const form = useForm({
+const basePermissions = Object.keys(props.permissionModules).reduce<Record<string, boolean>>((acc, module) => {
+    for (const action of Object.keys(props.permissionActions) as PermissionAction[]) {
+        acc[`${module}_${action}`] = action === 'read';
+    }
+
+    return acc;
+}, {});
+
+const form = useForm<Record<string, unknown>>({
     name: '',
-    menu_a_create: false,
-    menu_a_read: true,
-    menu_a_update: false,
-    menu_a_delete: false,
-    menu_b_create: false,
-    menu_b_read: true,
-    menu_b_update: false,
-    menu_b_delete: false,
     status: 'active',
+    ...basePermissions,
 });
 
 function submit(): void {
@@ -29,17 +37,19 @@ function submit(): void {
 </script>
 
 <template>
-    <Head title="Criar grupo de permissao" />
+    <Head title="Criar grupo de permissão" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
             <Card>
                 <CardHeader>
-                    <CardTitle>Novo grupo de permissao</CardTitle>
+                    <CardTitle>Novo grupo de permissão</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <PermissionGroupForm
                         :form="form"
+                        :permission-modules="permissionModules"
+                        :permission-actions="permissionActions"
                         submit-label="Criar"
                         @submit="submit"
                     />
@@ -48,3 +58,5 @@ function submit(): void {
         </div>
     </AppLayout>
 </template>
+
+
