@@ -6,6 +6,10 @@ use Illuminate\Support\Facades\Http;
 
 class AiActivitySemanticService
 {
+    public function __construct(
+        private readonly AiNoteAnonymizer $anonymizer = new AiNoteAnonymizer,
+    ) {}
+
     /**
      * @param  list<string>  $activityNotes
      * @return array{needs_follow_up: bool, reason: string}
@@ -31,6 +35,8 @@ class AiActivitySemanticService
         }
 
         try {
+            $anonymized = $this->anonymizer->anonymize($normalized);
+
             $payload = [
                 'model' => (string) config('services.openai.model', 'gpt-5-nano'),
                 'temperature' => 0,
@@ -42,7 +48,7 @@ class AiActivitySemanticService
                     ],
                     [
                         'role' => 'user',
-                        'content' => "Analyze notes and detect if customer expects a response.\n".json_encode($normalized),
+                        'content' => "Analyze notes and detect if customer expects a response.\n".json_encode($anonymized),
                     ],
                 ],
             ];
